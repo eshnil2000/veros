@@ -2,6 +2,8 @@ import warnings
 import scipy.sparse
 import scipy.sparse.linalg as spalg
 
+import numpy
+
 try:
     import pyamg
     HAS_PYAMG = True
@@ -56,12 +58,14 @@ def solve(vs, rhs, sol, boundary_val=None):
     if vs.enable_cyclic_x:
         cyclic.setcyclic_x(sol)
 
-    boundary_mask = np.logical_and.reduce(~vs.boundary_mask, axis=2)
+    boundary_mask = np.sum(~vs.boundary_mask, axis=2).astype("bool")
     rhs[...] = utilities.where(vs, boundary_mask, rhs, boundary_val) # set right hand side on boundaries
 
     if vs.backend_name == "bohrium":
         vs.flush()
         linear_solution = np.asarray(vs.poisson_solver(rhs.copy2numpy(), sol.copy2numpy()))
+    elif vs.backend_name == "cupy":
+        linear_solution = np.array(vs.poisson_solver(np.asnumpy(rhs), np.asnumpy(sol)))
     else:
         linear_solution = vs.poisson_solver(rhs, sol)
 
@@ -75,13 +79,10 @@ def _jacobi_preconditioner(vs, matrix):
     Construct a simple Jacobi preconditioner
     """
     eps = 1e-20
-    Z = np.ones((vs.nx + 4, vs.ny + 4))
-    Y = np.reshape(matrix.diagonal().copy(), (vs.nx + 4, vs.ny + 4))[2:-2, 2:-2]
-    Z[2:-2, 2:-2] = utilities.where(vs, np.abs(Y) > eps, 1. / (Y + eps), 1.)
-
-    if vs.backend_name == "bohrium":
-        Z = Z.copy2numpy()
-
+    Z = numpy.ones((vs.nx + 4, vs.ny + 4))
+    Y = numpy.reshape(matrix.diagonal().copy(), (vs.nx + 4, vs.ny + 4))[2:-2, 2:-2]
+    Z[2:-2, 2:-2] = numpy.where(numpy.abs(Y) > eps, 1. / (Y + eps), 1.)
+    
     return scipy.sparse.dia_matrix((Z.flatten(), 0), shape=(Z.size, Z.size)).tocsr()
 
 
@@ -90,7 +91,7 @@ def _assemble_poisson_matrix(vs):
     """
     Construct a sparse matrix based on the stencil for the 2D Poisson equation.
     """
-    boundary_mask = np.logical_and.reduce(~vs.boundary_mask, axis=2)
+    boundary_mask = np.sum(~vs.boundary_mask, axis=2)
 
     # assemble diagonals
     main_diag = np.ones((vs.nx + 4, vs.ny + 4))
@@ -130,6 +131,8 @@ def _assemble_poisson_matrix(vs):
 
     if vs.backend_name == "bohrium":
         cf = np.array([c.copy2numpy() for c in cf], bohrium=False)
+    elif vs.backend_name == "cupy":
+        cf = numpy.array([np.asnumpy(c) for c in cf])
     else:
         cf = np.array(cf)
 

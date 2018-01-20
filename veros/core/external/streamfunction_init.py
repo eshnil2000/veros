@@ -29,11 +29,11 @@ def streamfunction_init(vs):
     vs.psin = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype=vs.default_float_type)
     vs.dpsin = np.zeros((vs.nisle, 3), dtype=vs.default_float_type)
     vs.line_psin = np.zeros((vs.nisle, vs.nisle), dtype=vs.default_float_type)
-    vs.boundary_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype=np.bool)
-    vs.line_dir_south_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype=np.bool)
-    vs.line_dir_north_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype=np.bool)
-    vs.line_dir_east_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype=np.bool)
-    vs.line_dir_west_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype=np.bool)
+    vs.boundary_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype="bool")
+    vs.line_dir_south_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype="bool")
+    vs.line_dir_north_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype="bool")
+    vs.line_dir_east_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype="bool")
+    vs.line_dir_west_mask = np.zeros((vs.nx + 4, vs.ny + 4, vs.nisle), dtype="bool")
 
     if vs.backend_name == "bohrium":
         vs.boundary_mask = vs.boundary_mask.copy2numpy()

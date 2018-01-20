@@ -1,8 +1,6 @@
-import sys
-import os
-import time
+import math
 
-from veros import VerosLegacy, veros_method, tools
+from veros import VerosLegacy, veros_method
 
 yt_start = -39.0
 yt_end = 43
@@ -88,7 +86,7 @@ class ACC2Benchmark(VerosLegacy):
     @veros_method
     def set_coriolis(self):
         m = self.main_module
-        m.coriolis_t[:, :] = 2 * m.omega * np.sin(m.yt[None, :] / 180. * np.pi)
+        m.coriolis_t[:, :] = 2 * m.omega * np.sin(m.yt[None, :] / 180. * math.pi)
 
     @veros_method
     def set_topography(self):
@@ -109,8 +107,8 @@ class ACC2Benchmark(VerosLegacy):
         # wind stress forcing
         taux = np.zeros(m.ny + 1, dtype=self.default_float_type)
         yt = m.yt[2:m.ny + 3]
-        taux = (.1e-3 * np.sin(np.pi * (m.yu[2:m.ny + 3] - yu_start) / (-20.0 - yt_start))) * (yt < -20) \
-            + (.1e-3 * (1 - np.cos(2 * np.pi *
+        taux = (.1e-3 * np.sin(math.pi * (m.yu[2:m.ny + 3] - yu_start) / (-20.0 - yt_start))) * (yt < -20) \
+            + (.1e-3 * (1 - np.cos(2 * math.pi *
                                    (m.yu[2:m.ny + 3] - 10.0) / (yu_end - 10.0)))) * (yt > 10)
         m.surface_taux[:, 2:m.ny + 3] = taux * m.maskU[:, 2:m.ny + 3, -1]
 

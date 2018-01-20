@@ -17,10 +17,11 @@ Runs selected Veros benchmarks back to back and writes timing results to a JSON 
 """
 
 TESTDIR = os.path.join(os.path.dirname(__file__), os.path.relpath("benchmarks"))
-COMPONENTS = ["numpy", "bohrium", "bohrium-opencl", "bohrium-cuda", "fortran", "fortran-mpi"]
+COMPONENTS = ["numpy", "cupy", "bohrium", "bohrium-opencl", "bohrium-cuda", "fortran", "fortran-mpi"]
 STATIC_SETTINGS = "-v debug -s nx {nx} -s ny {ny} -s nz {nz} -s default_float_type {float_type} --timesteps {timesteps}"
 BENCHMARK_COMMANDS = {
     "numpy": "OMP_NUM_THREADS={nproc} {python} {filename} -b numpy " + STATIC_SETTINGS,
+    "cupy": "OMP_NUM_THREADS={nproc} {python} {filename} -b cupy " + STATIC_SETTINGS,
     "bohrium": "OMP_NUM_THREADS={nproc} BH_STACK=openmp BH_OPENMP_PROF=1 {python} {filename} -b bohrium "  + STATIC_SETTINGS,
     "bohrium-opencl": "BH_STACK=opencl BH_OPENCL_PROF=1 {python} {filename} -b bohrium " + STATIC_SETTINGS,
     "bohrium-cuda": "BH_STACK=cuda BH_CUDA_PROF=1 {python} {filename} -b bohrium " + STATIC_SETTINGS,

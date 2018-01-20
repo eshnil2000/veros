@@ -192,9 +192,9 @@ def calc_topo(vs):
     vs.hu[...] = np.sum(vs.maskU * vs.dzt[np.newaxis, np.newaxis, :], axis=2)
     vs.hv[...] = np.sum(vs.maskV * vs.dzt[np.newaxis, np.newaxis, :], axis=2)
 
-    mask = (vs.hu == 0).astype(np.float)
+    mask = (vs.hu == 0).astype("float")
     vs.hur[...] = 1. / (vs.hu + mask) * (1 - mask)
-    mask = (vs.hv == 0).astype(np.float)
+    mask = (vs.hv == 0).astype("float")
     vs.hvr[...] = 1. / (vs.hv + mask) * (1 - mask)
 
 
@@ -252,6 +252,10 @@ def solve_tridiag(vs, a, b, c, d):
     if vs.backend_name == "numpy":
         a[..., 0] = c[..., -1] = 0 # remove couplings between slices
         return lapack.dgtsv(a.flatten()[1:], b.flatten(), c.flatten()[:-1], d.flatten())[3].reshape(a.shape)
+
+    if vs.backend_name == "cupy":
+        a[..., 0] = c[..., -1] = 0 # remove couplings between slices
+        return np.array(lapack.dgtsv(np.asnumpy(a.flatten()[1:]), np.asnumpy(b.flatten()), np.asnumpy(c.flatten()[:-1]), np.asnumpy(d.flatten()))[3]).reshape(a.shape)
 
     if vs.vector_engine == "opencl":
         return tdma_opencl.tdma(a, b, c, d)

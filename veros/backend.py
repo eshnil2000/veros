@@ -14,7 +14,9 @@ except ImportError:
     warnings.warn("Could not import Bohrium")
     bohrium = None
 
-BACKENDS = {"numpy": numpy, "bohrium": bohrium}
+import cupy
+
+BACKENDS = {"numpy": numpy, "bohrium": bohrium, "cupy": cupy}
 
 
 def get_backend(backend_name):

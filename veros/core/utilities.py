@@ -3,7 +3,7 @@ from .. import veros_method, veros_inline_method
 
 @veros_inline_method
 def where(vs, cond, arr1, arr2):
-    assert cond.dtype == np.bool
+    assert cond.dtype == "bool"
     return cond * arr1 + np.logical_not(cond) * arr2
 
 
@@ -40,7 +40,6 @@ def solve_implicit(vs, ks, a, b, c, d, b_edge=None, d_edge=None):
                               >= ks[:, :, np.newaxis])
 
     a_tri = water_mask * a * np.logical_not(edge_mask)
-    #a_tri = np.logical_not(edge_mask) * a_tri
     b_tri = where(vs, water_mask, b, 1.)
     if b_edge is not None:
         b_tri = where(vs, edge_mask, b_edge, b_tri)

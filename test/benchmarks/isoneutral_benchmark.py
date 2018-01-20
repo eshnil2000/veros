@@ -86,10 +86,10 @@ class StreamfunctionBenchmark(VerosLegacy):
                     return
             raise AttributeError("Legacy pyOM has no attribute {}".format(attribute))
         else:
-            if isinstance(value, np.ndarray):
-                getattr(self, attribute)[...] = value
-            else:
+            if np.isscalar(value) or value.size == 1:
                 setattr(self, attribute, value)
+            else:
+                getattr(self, attribute)[...] = value
 
 
     @veros_method

@@ -84,7 +84,7 @@ class VerosSetup(metaclass=abc.ABCMeta):
         Example:
           >>> @veros_method
           >>> def set_initial_conditions(self, vs):
-          >>>     vs.u[:, :, :, vs.tau] = np.random.rand(vs.u.shape[:-1])
+          >>>     vs.u = jax.ops.index_update(vs.u, jax.ops.index[:, :, :, vs.tau], np.random.rand(vs.u.shape[:-1]))
         """
         pass
 
@@ -100,9 +100,9 @@ class VerosSetup(metaclass=abc.ABCMeta):
           >>> @veros_method
           >>> def set_grid(self, vs):
           >>>     vs.x_origin, vs.y_origin = 0, 0
-          >>>     vs.dxt[...] = [0.1, 0.05, 0.025, 0.025, 0.05, 0.1]
-          >>>     vs.dyt[...] = 1.
-          >>>     vs.dzt[...] = [10, 10, 20, 50, 100, 200]
+          >>>     vs.dxt = jax.ops.index_update(vs.dxt, jax.ops.index[...], [0.1, 0.05, 0.025, 0.025, 0.05, 0.1])
+          >>>     vs.dyt = jax.ops.index_update(vs.dyt, jax.ops.index[...], 1.)
+          >>>     vs.dzt = jax.ops.index_update(vs.dzt, jax.ops.index[...], [10, 10, 20, 50, 100, 200])
         """
         pass
 
@@ -115,7 +115,7 @@ class VerosSetup(metaclass=abc.ABCMeta):
         Example:
           >>> @veros_method
           >>> def set_coriolis(self, vs):
-          >>>     vs.coriolis_t[:, :] = 2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi)
+          >>>     vs.coriolis_t = jax.ops.index_update(vs.coriolis_t, jax.ops.index[:, :], 2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi))
         """
         pass
 
@@ -128,9 +128,9 @@ class VerosSetup(metaclass=abc.ABCMeta):
         Example:
           >>> @veros_method
           >>> def set_topography(self, vs):
-          >>>     vs.kbot[:, :] = 10
+          >>>     vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[:, :], 10)
           >>>     # add a rectangular island somewhere inside the domain
-          >>>     vs.kbot[10:20, 10:20] = 0
+          >>>     vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[10:20, 10:20], 0)
         """
         pass
 
@@ -147,7 +147,7 @@ class VerosSetup(metaclass=abc.ABCMeta):
           >>> @veros_method
           >>> def set_forcing(self, vs):
           >>>     current_month = (vs.time / (31 * 24 * 60 * 60)) % 12
-          >>>     vs.surface_taux[:, :] = vs._windstress_data[:, :, current_month]
+          >>>     vs.surface_taux = jax.ops.index_update(vs.surface_taux, jax.ops.index[:, :], vs._windstress_data[:, :, current_month])
         """
         pass
 

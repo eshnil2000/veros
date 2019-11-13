@@ -1,3 +1,5 @@
+import jax.ops
+
 from .. import veros_method
 from ..variables import allocate
 from .utilities import pad_z_edges, where
@@ -90,40 +92,57 @@ def calculate_velocity_on_wgrid(vs):
     if maskW has exactly one true value across each depth slice.
     """
     # lateral advection velocities on W grid
-    vs.u_wgrid[:, :, :-1] = vs.u[:, :, 1:, vs.tau] * vs.maskU[:, :, 1:] * 0.5 \
+    vs.u_wgrid = jax.ops.index_update(vs.u_wgrid, jax.ops.index[:, :, :-1],
+        vs.u[:, :, 1:, vs.tau] * vs.maskU[:, :, 1:] * 0.5 \
         * vs.dzt[np.newaxis, np.newaxis, 1:] / vs.dzw[np.newaxis, np.newaxis, :-1] \
         + vs.u[:, :, :-1, vs.tau] * vs.maskU[:, :, :-1] * 0.5 \
         * vs.dzt[np.newaxis, np.newaxis, :-1] / vs.dzw[np.newaxis, np.newaxis, :-1]
-    vs.v_wgrid[:, :, :-1] = vs.v[:, :, 1:, vs.tau] * vs.maskV[:, :, 1:] * 0.5 \
+    )
+    vs.v_wgrid = jax.ops.index_update(vs.v_wgrid, jax.ops.index[:, :, :-1],
+        vs.v[:, :, 1:, vs.tau] * vs.maskV[:, :, 1:] * 0.5 \
         * vs.dzt[np.newaxis, np.newaxis, 1:] / vs.dzw[np.newaxis, np.newaxis, :-1] \
         + vs.v[:, :, :-1, vs.tau] * vs.maskV[:, :, :-1] * 0.5 \
         * vs.dzt[np.newaxis, np.newaxis, :-1] / vs.dzw[np.newaxis, np.newaxis, :-1]
-    vs.u_wgrid[:, :, -1] = vs.u[:, :, -1, vs.tau] * \
+    )
+    vs.u_wgrid = jax.ops.index_update(vs.u_wgrid, jax.ops.index[:, :, -1],
+        vs.u[:, :, -1, vs.tau] * \
         vs.maskU[:, :, -1] * 0.5 * vs.dzt[-1:] / vs.dzw[-1:]
-    vs.v_wgrid[:, :, -1] = vs.v[:, :, -1, vs.tau] * \
+    )
+    vs.v_wgrid = jax.ops.index_update(vs.v_wgrid, jax.ops.index[:, :, -1],
+        vs.v[:, :, -1, vs.tau] * \
         vs.maskV[:, :, -1] * 0.5 * vs.dzt[-1:] / vs.dzw[-1:]
+    )
 
     # redirect velocity at bottom and at topography
-    vs.u_wgrid[:, :, 0] = vs.u_wgrid[:, :, 0] + vs.u[:, :, 0, vs.tau] \
+    vs.u_wgrid = jax.ops.index_update(vs.u_wgrid, jax.ops.index[:, :, 0],
+        vs.u_wgrid[:, :, 0] + vs.u[:, :, 0, vs.tau] \
         * vs.maskU[:, :, 0] * 0.5 * vs.dzt[0:1] / vs.dzw[0:1]
-    vs.v_wgrid[:, :, 0] = vs.v_wgrid[:, :, 0] + vs.v[:, :, 0, vs.tau] \
+    )
+    vs.v_wgrid = jax.ops.index_update(vs.v_wgrid, jax.ops.index[:, :, 0],
+        vs.v_wgrid[:, :, 0] + vs.v[:, :, 0, vs.tau] \
         * vs.maskV[:, :, 0] * 0.5 * vs.dzt[0:1] / vs.dzw[0:1]
+    )
     mask = vs.maskW[:-1, :, :-1] * vs.maskW[1:, :, :-1]
-    vs.u_wgrid[:-1, :, 1:] += (vs.u_wgrid[:-1, :, :-1] * vs.dzw[np.newaxis, np.newaxis, :-1]
-                                  / vs.dzw[np.newaxis, np.newaxis, 1:]) * (1. - mask)
+    vs.u_wgrid = jax.ops.index_add(vs.u_wgrid, jax.ops.index[:-1, :, 1:],
+        (vs.u_wgrid[:-1, :, :-1] * vs.dzw[np.newaxis, np.newaxis, :-1]
+                                  / vs.dzw[np.newaxis, np.newaxis, 1:]) * (1. - mask))
     vs.u_wgrid[:-1, :, :-1] *= mask
     mask = vs.maskW[:, :-1, :-1] * vs.maskW[:, 1:, :-1]
-    vs.v_wgrid[:, :-1, 1:] += (vs.v_wgrid[:, :-1, :-1] * vs.dzw[np.newaxis, np.newaxis, :-1]
-                                  / vs.dzw[np.newaxis, np.newaxis, 1:]) * (1. - mask)
+    vs.v_wgrid = jax.ops.index_add(vs.v_wgrid, jax.ops.index[:, :-1, 1:],
+        (vs.v_wgrid[:, :-1, :-1] * vs.dzw[np.newaxis, np.newaxis, :-1]
+                                  / vs.dzw[np.newaxis, np.newaxis, 1:]) * (1. - mask))
     vs.v_wgrid[:, :-1, :-1] *= mask
 
     # vertical advection velocity on W grid from continuity
-    vs.w_wgrid[:, :, 0] = 0.
-    vs.w_wgrid[1:, 1:, :] = np.cumsum(-vs.dzw[np.newaxis, np.newaxis, :] *
-                                         ((vs.u_wgrid[1:, 1:, :] - vs.u_wgrid[:-1, 1:, :]) / (vs.cost[np.newaxis, 1:, np.newaxis] * vs.dxt[1:, np.newaxis, np.newaxis])
-                                          + (vs.cosu[np.newaxis, 1:, np.newaxis] * vs.v_wgrid[1:, 1:, :] -
-                                             vs.cosu[np.newaxis, :-1, np.newaxis] * vs.v_wgrid[1:, :-1, :])
-                                          / (vs.cost[np.newaxis, 1:, np.newaxis] * vs.dyt[np.newaxis, 1:, np.newaxis])), axis=2)
+    vs.w_wgrid = jax.ops.index_update(vs.w_wgrid, jax.ops.index[:, :, 0],
+        0.)
+    vs.w_wgrid = jax.ops.index_update(vs.w_wgrid, jax.ops.index[1:, 1:, :],
+        np.cumsum(-vs.dzw[np.newaxis, np.newaxis, :] *
+        ((vs.u_wgrid[1:, 1:, :] - vs.u_wgrid[:-1, 1:, :]) / (vs.cost[np.newaxis, 1:, np.newaxis] * vs.dxt[1:, np.newaxis, np.newaxis])
+        + (vs.cosu[np.newaxis, 1:, np.newaxis] * vs.v_wgrid[1:, 1:, :] -
+            vs.cosu[np.newaxis, :-1, np.newaxis] * vs.v_wgrid[1:, :-1, :])
+        / (vs.cost[np.newaxis, 1:, np.newaxis] * vs.dyt[np.newaxis, 1:, np.newaxis])), axis=2)
+    )
 
 
 @veros_method
@@ -132,17 +151,19 @@ def adv_flux_superbee_wgrid(vs, adv_fe, adv_fn, adv_ft, var):
     Calculates advection of a tracer defined on Wgrid
     """
     maskUtr = allocate(vs, ('xt', 'yt', 'zw'))
-    maskUtr[:-1, :, :] = vs.maskW[1:, :, :] * vs.maskW[:-1, :, :]
-    adv_fe[1:-2, 2:-2, :] = _adv_superbee(vs, vs.u_wgrid, var, maskUtr, vs.dxt, 0)
+    maskUtr = jax.ops.index_update(maskUtr, jax.ops.index[:-1, :, :], vs.maskW[1:, :, :] * vs.maskW[:-1, :, :])
+    adv_fe = jax.ops.index_update(adv_fe, jax.ops.index[1:-2, 2:-2, :], _adv_superbee(vs, vs.u_wgrid, var, maskUtr, vs.dxt, 0))
 
     maskVtr = allocate(vs, ('xt', 'yt', 'zw'))
-    maskVtr[:, :-1, :] = vs.maskW[:, 1:, :] * vs.maskW[:, :-1, :]
-    adv_fn[2:-2, 1:-2, :] = _adv_superbee(vs, vs.v_wgrid, var, maskVtr, vs.dyt, 1)
+    maskVtr = jax.ops.index_update(maskVtr, jax.ops.index[:, :-1, :], vs.maskW[:, 1:, :] * vs.maskW[:, :-1, :])
+    adv_fn = jax.ops.index_update(adv_fn, jax.ops.index[2:-2, 1:-2, :], _adv_superbee(vs, vs.v_wgrid, var, maskVtr, vs.dyt, 1))
 
     maskWtr = allocate(vs, ('xt', 'yt', 'zw'))
-    maskWtr[:, :, :-1] = vs.maskW[:, :, 1:] * vs.maskW[:, :, :-1]
-    adv_ft[2:-2, 2:-2, :-1] = _adv_superbee(vs, vs.w_wgrid, var, maskWtr, vs.dzw, 2)
-    adv_ft[..., -1] = 0.0
+    maskWtr = jax.ops.index_update(maskWtr, jax.ops.index[:, :, :-1], vs.maskW[:, :, 1:] * vs.maskW[:, :, :-1])
+    adv_ft = jax.ops.index_update(adv_ft, jax.ops.index[2:-2, 2:-2, :-1], _adv_superbee(vs, vs.w_wgrid, var, maskWtr, vs.dzw, 2))
+    adv_ft = jax.ops.index_update(adv_ft, jax.ops.index[..., -1], 0.0)
+
+    return adv_fe, adv_fn, adv_ft
 
 
 @veros_method
@@ -152,17 +173,25 @@ def adv_flux_upwind_wgrid(vs, adv_fe, adv_fn, adv_ft, var):
     """
     maskUtr = vs.maskW[2:-1, 2:-2, :] * vs.maskW[1:-2, 2:-2, :]
     rj = (var[2:-1, 2:-2, :] - var[1:-2, 2:-2, :]) * maskUtr
-    adv_fe[1:-2, 2:-2, :] = vs.u_wgrid[1:-2, 2:-2, :] * (var[2:-1, 2:-2, :] + var[1:-2, 2:-2, :]) * 0.5 \
+    adv_fe = jax.ops.index_update(adv_fe, jax.ops.index[1:-2, 2:-2, :],
+        vs.u_wgrid[1:-2, 2:-2, :] * (var[2:-1, 2:-2, :] + var[1:-2, 2:-2, :]) * 0.5
         - np.abs(vs.u_wgrid[1:-2, 2:-2, :]) * rj * 0.5
+    )
 
     maskVtr = vs.maskW[2:-2, 2:-1, :] * vs.maskW[2:-2, 1:-2, :]
     rj = (var[2:-2, 2:-1, :] - var[2:-2, 1:-2, :]) * maskVtr
-    adv_fn[2:-2, 1:-2, :] = vs.cosu[np.newaxis, 1:-2, np.newaxis] * vs.v_wgrid[2:-2, 1:-2, :] * \
+    adv_fn = jax.ops.index_update(adv_fn, jax.ops.index[2:-2, 1:-2, :],
+        vs.cosu[np.newaxis, 1:-2, np.newaxis] * vs.v_wgrid[2:-2, 1:-2, :] *
         (var[2:-2, 2:-1, :] + var[2:-2, 1:-2, :]) * 0.5 \
         - np.abs(vs.cosu[np.newaxis, 1:-2, np.newaxis] * vs.v_wgrid[2:-2, 1:-2, :]) * rj * 0.5
+    )
 
     maskWtr = vs.maskW[2:-2, 2:-2, 1:] * vs.maskW[2:-2, 2:-2, :-1]
     rj = (var[2:-2, 2:-2, 1:] - var[2:-2, 2:-2, :-1]) * maskWtr
-    adv_ft[2:-2, 2:-2, :-1] = vs.w_wgrid[2:-2, 2:-2, :-1] * (var[2:-2, 2:-2, 1:] + var[2:-2, 2:-2, :-1]) * 0.5 \
+    adv_ft = jax.ops.index_update(adv_ft, jax.ops.index[2:-2, 2:-2, :-1],
+        vs.w_wgrid[2:-2, 2:-2, :-1] * (var[2:-2, 2:-2, 1:] + var[2:-2, 2:-2, :-1]) * 0.5
         - np.abs(vs.w_wgrid[2:-2, 2:-2, :-1]) * rj * 0.5
-    adv_ft[:, :, -1] = 0.
+    )
+    adv_ft = jax.ops.index_update(adv_ft, jax.ops.index[:, :, -1], 0.)
+
+    return adv_fe, adv_fn, adv_ft

@@ -18,7 +18,7 @@ class ACCSectorSetup(VerosSetup):
     This setup demonstrates:
      - setting up an idealized geometry after `(Munday et al., 2013) <https://doi.org/10.1175/JPO-D-12-095.1>`_.
      - modifing surface forcings over selected regions of the domain
-     - sensitivity of circumpolar transport and meridional overturning 
+     - sensitivity of circumpolar transport and meridional overturning
        to changes in Southern Ocean wind stress and buoyancy anomalies
      - basic usage of diagnostics
 
@@ -93,17 +93,21 @@ class ACCSectorSetup(VerosSetup):
     @veros_method
     def set_grid(self, vs):
         # keep total domain size constant when nx or ny changes
-        vs.dxt[...] = 2.0 * 15 / vs.nx
-        vs.dyt[...] = 2.0 * 62 / vs.ny
+        vs.dxt = jax.ops.index_update(vs.dxt, jax.ops.index[...],
+        2.0 * 15 / vs.nx
+        vs.dyt = jax.ops.index_update(vs.dyt, jax.ops.index[...],
+        2.0 * 62 / vs.ny
 
         vs.x_origin = 0.0
         vs.y_origin = -60.0
 
-        vs.dzt[...] = veros.tools.get_vinokur_grid_steps(vs.nz, self.max_depth, 10., refine_towards='lower')
+        vs.dzt = jax.ops.index_update(vs.dzt, jax.ops.index[...],
+        veros.tools.get_vinokur_grid_steps(vs.nz, self.max_depth, 10., refine_towards='lower')
 
     @veros_method
     def set_coriolis(self, vs):
-        vs.coriolis_t[:, :] = 2 * vs.omega * np.sin(vs.yt[None, :] / 180. * vs.pi)
+        vs.coriolis_t = jax.ops.index_update(vs.coriolis_t, jax.ops.index[:, :],
+        2 * vs.omega * np.sin(vs.yt[None, :] / 180. * vs.pi)
 
     @veros_method
     def set_topography(self, vs):
@@ -114,13 +118,16 @@ class ACCSectorSetup(VerosSetup):
         # of the circumpolar channel at the inflow and outflow regions
         bathymetry = np.logical_or(((x <= 1.0) & (y < -40)), ((x >= 27) & (y < -40)))
         kzt2000 = np.sum((vs.zt < -2000.).astype(np.int))
-        vs.kbot[bathymetry] = kzt2000
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[bathymetry],
+        kzt2000
 
     @veros_method
     def set_initial_conditions(self, vs):
         # initial conditions
-        vs.temp[:, :, :, 0:2] = ((1 - vs.zt[None, None, :] / vs.zw[0]) * 15 * vs.maskT)[..., None]
-        vs.salt[:, :, :, 0:2] = 35.0 * vs.maskT[..., None]
+        vs.temp = jax.ops.index_update(vs.temp, jax.ops.index[:, :, :, 0:2],
+        ((1 - vs.zt[None, None, :] / vs.zw[0]) * 15 * vs.maskT)[..., None]
+        vs.salt = jax.ops.index_update(vs.salt, jax.ops.index[:, :, :, 0:2],
+        35.0 * vs.maskT[..., None]
 
         # wind stress forcing
         yt_min = global_min(vs, vs.yt.min())
@@ -144,26 +151,33 @@ class ACCSectorSetup(VerosSetup):
         taux[subequatorial_south_s] = -5e-2 * np.sin(np.pi * (vs.yt[subequatorial_south_s] - 30.) / 30.)
         taux[equator] = -1.5e-2 * np.cos(np.pi * (vs.yu[equator] - 10.) / 10.) - 2.5e-2
         taux[south] = 15e-2 * np.sin(np.pi * (vs.yu[south] - yu_min) / (-30. - yt_min))
-        vs.surface_taux[:, :] = taux * vs.maskU[:, :, -1]
+        vs.surface_taux = jax.ops.index_update(vs.surface_taux, jax.ops.index[:, :],
+        taux * vs.maskU[:, :, -1]
 
         # surface heatflux forcing
         DELTA_T, TS, TN = 25., 0., 5.
         vs._t_star = allocate(vs, ('yt',), fill=DELTA_T)
-        vs._t_star[vs.yt<0] = TS + DELTA_T * np.sin(np.pi * (vs.yt[vs.yt<0] + 60.) / np.abs(2 * vs.y_origin))
-        vs._t_star[vs.yt>0] = TN + (DELTA_T + TS - TN) * np.sin(np.pi * (vs.yt[vs.yt>0] + 60.) / np.abs(2 * vs.y_origin))
+        vs._t_star = jax.ops.index_update(vs._t_star, jax.ops.index[vs.yt<0],
+        TS + DELTA_T * np.sin(np.pi * (vs.yt[vs.yt<0] + 60.) / np.abs(2 * vs.y_origin))
+        vs._t_star = jax.ops.index_update(vs._t_star, jax.ops.index[vs.yt>0],
+        TN + (DELTA_T + TS - TN) * np.sin(np.pi * (vs.yt[vs.yt>0] + 60.) / np.abs(2 * vs.y_origin))
         vs._t_rest = vs.dzt[None, -1] / (10. * 86400.) * vs.maskT[:, :, -1]
 
         if vs.enable_tke:
-            vs.forc_tke_surface[2:-2, 2:-2] = np.sqrt((0.5 * (vs.surface_taux[2:-2, 2:-2] + vs.surface_taux[1:-3, 2:-2]) / vs.rho_0)**2
+            vs.forc_tke_surface = jax.ops.index_update(vs.forc_tke_surface, jax.ops.index[2:-2, 2:-2],
+        np.sqrt((0.5 * (vs.surface_taux[2:-2, 2:-2] + vs.surface_taux[1:-3, 2:-2]) / vs.rho_0)**2
                                                       + (0.5 * (vs.surface_tauy[2:-2, 2:-2] + vs.surface_tauy[2:-2, 1:-3]) / vs.rho_0)**2)**(1.5)
 
         if vs.enable_idemix:
-            vs.forc_iw_bottom[...] = 1e-6 * vs.maskW[:, :, -1]
-            vs.forc_iw_surface[...] = 1e-7 * vs.maskW[:, :, -1]
+            vs.forc_iw_bottom = jax.ops.index_update(vs.forc_iw_bottom, jax.ops.index[...],
+        1e-6 * vs.maskW[:, :, -1]
+            vs.forc_iw_surface = jax.ops.index_update(vs.forc_iw_surface, jax.ops.index[...],
+        1e-7 * vs.maskW[:, :, -1]
 
     @veros_method
     def set_forcing(self, vs):
-        vs.forc_temp_surface[...] = vs._t_rest * (vs._t_star - vs.temp[:, :, -1, vs.tau])
+        vs.forc_temp_surface = jax.ops.index_update(vs.forc_temp_surface, jax.ops.index[...],
+        vs._t_rest * (vs._t_star - vs.temp[:, :, -1, vs.tau])
 
     @veros_method
     def set_diagnostics(self, vs):

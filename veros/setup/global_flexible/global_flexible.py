@@ -129,7 +129,8 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
         if vs.ny % 2:
             raise ValueError('ny has to be an even number of grid cells')
 
-        vs.dxt[...] = 360. / vs.nx
+        vs.dxt = jax.ops.index_update(vs.dxt, jax.ops.index[...],
+        360. / vs.nx
 
         if self.equatorial_grid_spacing_factor is not None:
             eq_spacing = self.equatorial_grid_spacing_factor * 160. / vs.ny
@@ -141,16 +142,19 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
         else:
             polar_spacing = None
 
-        vs.dyt[2:-2] = veros.tools.get_vinokur_grid_steps(
+        vs.dyt = jax.ops.index_update(vs.dyt, jax.ops.index[2:-2],
+        veros.tools.get_vinokur_grid_steps(
             vs.ny, 160., eq_spacing, upper_stepsize=polar_spacing, two_sided_grid=True
         )
-        vs.dzt[...] = veros.tools.get_vinokur_grid_steps(vs.nz, self.max_depth, self.min_depth, refine_towards='lower')
+        vs.dzt = jax.ops.index_update(vs.dzt, jax.ops.index[...],
+        veros.tools.get_vinokur_grid_steps(vs.nz, self.max_depth, self.min_depth, refine_towards='lower')
         vs.y_origin = -80.
         vs.x_origin = 90.
 
     @veros_method
     def set_coriolis(self, vs):
-        vs.coriolis_t[...] = 2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi)
+        vs.coriolis_t = jax.ops.index_update(vs.coriolis_t, jax.ops.index[...],
+        2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi)
 
     @veros_method
     def _shift_longitude_array(self, vs, lon, arr):
@@ -183,7 +187,8 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
         )
 
         depth_levels = 1 + np.argmin(np.abs(z_interp[:, :, np.newaxis] - vs.zt[np.newaxis, np.newaxis, :]), axis=2)
-        vs.kbot[2:-2, 2:-2] = np.where(z_interp < 0., depth_levels, 0)[2:-2, 2:-2]
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[2:-2, 2:-2],
+        np.where(z_interp < 0., depth_levels, 0)[2:-2, 2:-2]
         vs.kbot *= vs.kbot < vs.nz
 
         enforce_boundaries(vs, vs.kbot)
@@ -198,7 +203,8 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
             )
         )
 
-        vs.kbot[marginal] = 0
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[marginal],
+        0
 
     @veros_method
     def set_initial_conditions(self, vs):
@@ -234,26 +240,32 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
         temp_raw = self._get_data(vs, 'temperature', idx=data_subset)[..., ::-1]
         temp_data = veros.tools.interpolate((xt_forc, yt_forc, zt_forc), temp_raw,
                                             t_grid)
-        vs.temp[2:-2, 2:-2, :, 0] = temp_data * vs.maskT[2:-2, 2:-2, :]
-        vs.temp[2:-2, 2:-2, :, 1] = temp_data * vs.maskT[2:-2, 2:-2, :]
+        vs.temp = jax.ops.index_update(vs.temp, jax.ops.index[2:-2, 2:-2, :, 0],
+        temp_data * vs.maskT[2:-2, 2:-2, :]
+        vs.temp = jax.ops.index_update(vs.temp, jax.ops.index[2:-2, 2:-2, :, 1],
+        temp_data * vs.maskT[2:-2, 2:-2, :]
 
         salt_raw = self._get_data(vs, 'salinity', idx=data_subset)[..., ::-1]
         salt_data = veros.tools.interpolate((xt_forc, yt_forc, zt_forc), salt_raw,
                                             t_grid)
-        vs.salt[2:-2, 2:-2, :, 0] = salt_data * vs.maskT[2:-2, 2:-2, :]
-        vs.salt[2:-2, 2:-2, :, 1] = salt_data * vs.maskT[2:-2, 2:-2, :]
+        vs.salt = jax.ops.index_update(vs.salt, jax.ops.index[2:-2, 2:-2, :, 0],
+        salt_data * vs.maskT[2:-2, 2:-2, :]
+        vs.salt = jax.ops.index_update(vs.salt, jax.ops.index[2:-2, 2:-2, :, 1],
+        salt_data * vs.maskT[2:-2, 2:-2, :]
 
         # wind stress on MIT grid
         time_grid = (vs.xt[2:-2], vs.yt[2:-2], np.arange(12))
         taux_raw = self._get_data(vs, 'tau_x', idx=data_subset)
         taux_data = veros.tools.interpolate((xt_forc, yt_forc, np.arange(12)),
                                             taux_raw, time_grid)
-        vs.taux[2:-2, 2:-2, :] = taux_data / vs.rho_0
+        vs.taux = jax.ops.index_update(vs.taux, jax.ops.index[2:-2, 2:-2, :],
+        taux_data / vs.rho_0
 
         tauy_raw = self._get_data(vs, 'tau_y', idx=data_subset)
         tauy_data = veros.tools.interpolate((xt_forc, yt_forc, np.arange(12)),
                                             tauy_raw, time_grid)
-        vs.tauy[2:-2, 2:-2, :] = tauy_data / vs.rho_0
+        vs.tauy = jax.ops.index_update(vs.tauy, jax.ops.index[2:-2, 2:-2, :],
+        tauy_data / vs.rho_0
 
         enforce_boundaries(vs, vs.taux)
         enforce_boundaries(vs, vs.tauy)
@@ -262,28 +274,33 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
         qnet_raw = self._get_data(vs, 'q_net', idx=data_subset)
         qnet_data = veros.tools.interpolate((xt_forc, yt_forc, np.arange(12)),
                                             qnet_raw, time_grid)
-        vs.qnet[2:-2, 2:-2, :] = -qnet_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
+        vs.qnet = jax.ops.index_update(vs.qnet, jax.ops.index[2:-2, 2:-2, :],
+        -qnet_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
 
         qnec_raw = self._get_data(vs, 'dqdt', idx=data_subset)
         qnec_data = veros.tools.interpolate((xt_forc, yt_forc, np.arange(12)),
                                             qnec_raw, time_grid)
-        vs.qnec[2:-2, 2:-2, :] = qnec_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
+        vs.qnec = jax.ops.index_update(vs.qnec, jax.ops.index[2:-2, 2:-2, :],
+        qnec_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
 
         qsol_raw = self._get_data(vs, 'swf', idx=data_subset)
         qsol_data = veros.tools.interpolate((xt_forc, yt_forc, np.arange(12)),
                                             qsol_raw, time_grid)
-        vs.qsol[2:-2, 2:-2, :] = -qsol_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
+        vs.qsol = jax.ops.index_update(vs.qsol, jax.ops.index[2:-2, 2:-2, :],
+        -qsol_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
 
         # SST and SSS
         sst_raw = self._get_data(vs, 'sst', idx=data_subset)
         sst_data = veros.tools.interpolate((xt_forc, yt_forc, np.arange(12)),
                                            sst_raw, time_grid)
-        vs.t_star[2:-2, 2:-2, :] = sst_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
+        vs.t_star = jax.ops.index_update(vs.t_star, jax.ops.index[2:-2, 2:-2, :],
+        sst_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
 
         sss_raw = self._get_data(vs, 'sss', idx=data_subset)
         sss_data = veros.tools.interpolate((xt_forc, yt_forc, np.arange(12)),
                                            sss_raw, time_grid)
-        vs.s_star[2:-2, 2:-2, :] = sss_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
+        vs.s_star = jax.ops.index_update(vs.s_star, jax.ops.index[2:-2, 2:-2, :],
+        sss_data * vs.maskT[2:-2, 2:-2, -1, np.newaxis]
 
         if vs.enable_idemix:
             tidal_energy_raw = self._get_data(vs, 'tidal_energy', idx=data_subset)
@@ -293,7 +310,8 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
             mask_x, mask_y = (i + 2 for i in np.indices((vs.nx, vs.ny)))
             mask_z = np.maximum(0, vs.kbot[2:-2, 2:-2] - 1)
             tidal_energy_data[:, :] *= vs.maskW[mask_x, mask_y, mask_z] / vs.rho_0
-            vs.forc_iw_bottom[2:-2, 2:-2] = tidal_energy_data
+            vs.forc_iw_bottom = jax.ops.index_update(vs.forc_iw_bottom, jax.ops.index[2:-2, 2:-2],
+        tidal_energy_data
 
         """
         Initialize penetration profile for solar radiation and store divergence in divpen
@@ -304,8 +322,10 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
         swarg2 = vs.zw / efold2_shortwave
         pen = rpart_shortwave * np.exp(swarg1) + (1.0 - rpart_shortwave) * np.exp(swarg2)
         pen[-1] = 0.
-        vs.divpen_shortwave[1:] = (pen[1:] - pen[:-1]) / vs.dzt[1:]
-        vs.divpen_shortwave[0] = pen[0] / vs.dzt[0]
+        vs.divpen_shortwave = jax.ops.index_update(vs.divpen_shortwave, jax.ops.index[1:],
+        (pen[1:] - pen[:-1]) / vs.dzt[1:]
+        vs.divpen_shortwave = jax.ops.index_update(vs.divpen_shortwave, jax.ops.index[0],
+        pen[0] / vs.dzt[0]
 
     @veros_method
     def set_forcing(self, vs):
@@ -317,21 +337,26 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
             vs.time, year_in_seconds, year_in_seconds / 12., 12
         )
 
-        vs.surface_taux[...] = f1 * vs.taux[:, :, n1] + f2 * vs.taux[:, :, n2]
-        vs.surface_tauy[...] = f1 * vs.tauy[:, :, n1] + f2 * vs.tauy[:, :, n2]
+        vs.surface_taux = jax.ops.index_update(vs.surface_taux, jax.ops.index[...],
+        f1 * vs.taux[:, :, n1] + f2 * vs.taux[:, :, n2]
+        vs.surface_tauy = jax.ops.index_update(vs.surface_tauy, jax.ops.index[...],
+        f1 * vs.tauy[:, :, n1] + f2 * vs.tauy[:, :, n2]
 
         if vs.enable_tke:
-            vs.forc_tke_surface[1:-1, 1:-1] = np.sqrt((0.5 * (vs.surface_taux[1:-1, 1:-1] + vs.surface_taux[:-2, 1:-1])) ** 2
+            vs.forc_tke_surface = jax.ops.index_update(vs.forc_tke_surface, jax.ops.index[1:-1, 1:-1],
+        np.sqrt((0.5 * (vs.surface_taux[1:-1, 1:-1] + vs.surface_taux[:-2, 1:-1])) ** 2
                                                       + (0.5 * (vs.surface_tauy[1:-1, 1:-1] + vs.surface_tauy[1:-1, :-2])) ** 2) ** (3. / 2.)
 
         # W/m^2 K kg/J m^3/kg = K m/s
         fxa = f1 * vs.t_star[..., n1] + f2 * vs.t_star[..., n2]
         vs.qqnec = f1 * vs.qnec[..., n1] + f2 * vs.qnec[..., n2]
         vs.qqnet = f1 * vs.qnet[..., n1] + f2 * vs.qnet[..., n2]
-        vs.forc_temp_surface[...] = (vs.qqnet + vs.qqnec * (fxa - vs.temp[..., -1, vs.tau])) \
+        vs.forc_temp_surface = jax.ops.index_update(vs.forc_temp_surface, jax.ops.index[...],
+        (vs.qqnet + vs.qqnec * (fxa - vs.temp[..., -1, vs.tau])) \
             * vs.maskT[..., -1] / cp_0 / vs.rho_0
         fxa = f1 * vs.s_star[..., n1] + f2 * vs.s_star[..., n2]
-        vs.forc_salt_surface[...] = 1. / t_rest * \
+        vs.forc_salt_surface = jax.ops.index_update(vs.forc_salt_surface, jax.ops.index[...],
+        1. / t_rest * \
             (fxa - vs.salt[..., -1, vs.tau]) * vs.maskT[..., -1] * vs.dzt[-1]
 
         # apply simple ice mask
@@ -343,7 +368,8 @@ class GlobalFlexibleResolutionSetup(VerosSetup):
 
         # solar radiation
         if vs.enable_tempsalt_sources:
-            vs.temp_source[..., :] = (f1 * vs.qsol[..., n1, None] + f2 * vs.qsol[..., n2, None]) \
+            vs.temp_source = jax.ops.index_update(vs.temp_source, jax.ops.index[..., :],
+        (f1 * vs.qsol[..., n1, None] + f2 * vs.qsol[..., n2, None]) \
                 * vs.divpen_shortwave[None, None, :] * ice[..., None] \
                 * vs.maskT[..., :] / cp_0 / vs.rho_0
 

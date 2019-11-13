@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import jax.ops
+
 from veros import VerosSetup, veros_method
 from veros.tools import cli
 from veros.variables import allocate
@@ -80,26 +82,26 @@ class ACCSetup(VerosSetup):
     def set_grid(self, vs):
         ddz = np.array([50., 70., 100., 140., 190., 240., 290., 340.,
                         390., 440., 490., 540., 590., 640., 690.])
-        vs.dxt[...] = 2.0
-        vs.dyt[...] = 2.0
+        vs.dxt = jax.ops.index_update(vs.dxt, jax.ops.index[...], 2.0)
+        vs.dyt = jax.ops.index_update(vs.dyt, jax.ops.index[...], 2.0)
         vs.x_origin = 0.0
         vs.y_origin = -40.0
-        vs.dzt[...] = ddz[::-1] / 2.5
+        vs.dzt = jax.ops.index_update(vs.dzt, jax.ops.index[...], ddz[::-1] / 2.5)
 
     @veros_method
     def set_coriolis(self, vs):
-        vs.coriolis_t[:, :] = 2 * vs.omega * np.sin(vs.yt[None, :] / 180. * vs.pi)
+        vs.coriolis_t = jax.ops.index_update(vs.coriolis_t, jax.ops.index[:, :], 2 * vs.omega * np.sin(vs.yt[None, :] / 180. * vs.pi))
 
     @veros_method
     def set_topography(self, vs):
         x, y = np.meshgrid(vs.xt, vs.yt, indexing='ij')
-        vs.kbot[...] = np.logical_or(x > 1.0, y < -20).astype(np.int)
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[...], np.logical_or(x > 1.0, y < -20).astype('int'))
 
     @veros_method
     def set_initial_conditions(self, vs):
         # initial conditions
-        vs.temp[:, :, :, 0:2] = ((1 - vs.zt[None, None, :] / vs.zw[0]) * 15 * vs.maskT)[..., None]
-        vs.salt[:, :, :, 0:2] = 35.0 * vs.maskT[..., None]
+        vs.temp = jax.ops.index_update(vs.temp, jax.ops.index[:, :, :, 0:2], ((1 - vs.zt[None, None, :] / vs.zw[0]) * 15 * vs.maskT)[..., None])
+        vs.salt = jax.ops.index_update(vs.salt, jax.ops.index[:, :, :, 0:2], 35.0 * vs.maskT[..., None])
 
         # wind stress forcing
         yt_min = global_min(vs, vs.yt.min())
@@ -107,28 +109,31 @@ class ACCSetup(VerosSetup):
         yt_max = global_max(vs, vs.yt.max())
         yu_max = global_max(vs, vs.yu.max())
 
-        taux = allocate(vs, ('yt',))
-        taux[vs.yt < -20] = 1e-4 * np.sin(vs.pi * (vs.yu[vs.yt < -20] - yu_min) / (-20.0 - yt_min))
-        taux[vs.yt > 10] = 1e-4 * (1 - np.cos(2 * vs.pi * (vs.yu[vs.yt > 10] - 10.0) / (yu_max - 10.0)))
-        vs.surface_taux[:, :] = taux * vs.maskU[:, :, -1]
+        taux = np.where(vs.yt < -20, 1e-4 * np.sin(vs.pi * (vs.yu- yu_min) / (-20.0 - yt_min)), 0)
+        taux = np.where(vs.yt > 10, 1e-4 * (1 - np.cos(2 * vs.pi * (vs.yu - 10.0) / (yu_max - 10.0))), taux)
+        vs.surface_taux = jax.ops.index_update(vs.surface_taux, jax.ops.index[:, :], taux * vs.maskU[:, :, -1])
 
         # surface heatflux forcing
         vs._t_star = allocate(vs, ('yt',), fill=15)
-        vs._t_star[vs.yt < -20] = 15 * (vs.yt[vs.yt < -20] - yt_min) / (-20 - yt_min)
-        vs._t_star[vs.yt > 20] = 15 * (1 - (vs.yt[vs.yt > 20] - 20) / (yt_max - 20))
+        vs._t_star = jax.ops.index_update(vs._t_star, jax.ops.index[vs.yt < -20],
+            15 * (vs.yt[vs.yt < -20] - yt_min) / (-20 - yt_min))
+        vs._t_star = jax.ops.index_update(vs._t_star, jax.ops.index[vs.yt > 20],
+            15 * (1 - (vs.yt[vs.yt > 20] - 20) / (yt_max - 20)))
         vs._t_rest = vs.dzt[None, -1] / (30. * 86400.) * vs.maskT[:, :, -1]
 
         if vs.enable_tke:
-            vs.forc_tke_surface[2:-2, 2:-2] = np.sqrt((0.5 * (vs.surface_taux[2:-2, 2:-2] + vs.surface_taux[1:-3, 2:-2]) / vs.rho_0)**2
+            vs.forc_tke_surface = jax.ops.index_update(vs.forc_tke_surface, jax.ops.index[2:-2, 2:-2],
+                np.sqrt((0.5 * (vs.surface_taux[2:-2, 2:-2] + vs.surface_taux[1:-3, 2:-2]) / vs.rho_0)**2
                                                       + (0.5 * (vs.surface_tauy[2:-2, 2:-2] + vs.surface_tauy[2:-2, 1:-3]) / vs.rho_0)**2)**(1.5)
+            )
 
         if vs.enable_idemix:
-            vs.forc_iw_bottom[...] = 1e-6 * vs.maskW[:, :, -1]
-            vs.forc_iw_surface[...] = 1e-7 * vs.maskW[:, :, -1]
+            vs.forc_iw_bottom = jax.ops.index_update(vs.forc_iw_bottom, jax.ops.index[...], 1e-6 * vs.maskW[:, :, -1])
+            vs.forc_iw_surface = jax.ops.index_update(vs.forc_iw_surface, jax.ops.index[...], 1e-7 * vs.maskW[:, :, -1])
 
     @veros_method
     def set_forcing(self, vs):
-        vs.forc_temp_surface[...] = vs._t_rest * (vs._t_star - vs.temp[:, :, -1, vs.tau])
+        vs.forc_temp_surface = jax.ops.index_update(vs.forc_temp_surface, jax.ops.index[...], vs._t_rest * (vs._t_star - vs.temp[:, :, -1, vs.tau]))
 
     @veros_method
     def set_diagnostics(self, vs):

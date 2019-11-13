@@ -103,15 +103,19 @@ class GlobalFourDegreeSetup(VerosSetup):
     def set_grid(self, vs):
         ddz = np.array([50., 70., 100., 140., 190., 240., 290., 340.,
                         390., 440., 490., 540., 590., 640., 690.])
-        vs.dzt[:] = ddz[::-1]
-        vs.dxt[:] = 4.0
-        vs.dyt[:] = 4.0
+        vs.dzt = jax.ops.index_update(vs.dzt, jax.ops.index[:],
+        ddz[::-1]
+        vs.dxt = jax.ops.index_update(vs.dxt, jax.ops.index[:],
+        4.0
+        vs.dyt = jax.ops.index_update(vs.dyt, jax.ops.index[:],
+        4.0
         vs.y_origin = -76.0
         vs.x_origin = 4.0
 
     @veros_method
     def set_coriolis(self, vs):
-        vs.coriolis_t[...] = 2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi)
+        vs.coriolis_t = jax.ops.index_update(vs.coriolis_t, jax.ops.index[...],
+        2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi)
 
     @veros_method(dist_safe=False, local_variables=[
         'kbot'
@@ -120,10 +124,13 @@ class GlobalFourDegreeSetup(VerosSetup):
         bathymetry_data = self._read_forcing(vs, 'bathymetry')
         salt_data = self._read_forcing(vs, 'salinity')[:, :, ::-1]
         mask_salt = salt_data == 0.
-        vs.kbot[2:-2, 2:-2] = 1 + np.sum(mask_salt.astype(np.int), axis=2)
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[2:-2, 2:-2],
+        1 + np.sum(mask_salt.astype(np.int), axis=2)
         mask_bathy = bathymetry_data == 0
-        vs.kbot[2:-2, 2:-2][mask_bathy] = 0
-        vs.kbot[vs.kbot == vs.nz] = 0
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[2:-2, 2:-2][mask_bathy],
+        0
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[vs.kbot == vs.nz],
+        0
 
     @veros_method(dist_safe=False, local_variables=[
         'taux', 'tauy', 'qnec', 'qnet', 'sss_clim', 'sst_clim',
@@ -133,38 +140,51 @@ class GlobalFourDegreeSetup(VerosSetup):
     def set_initial_conditions(self, vs):
         # initial conditions for T and S
         temp_data = self._read_forcing(vs, 'temperature')[:, :, ::-1]
-        vs.temp[2:-2, 2:-2, :, :2] = temp_data[:, :, :, np.newaxis] * \
+        vs.temp = jax.ops.index_update(vs.temp, jax.ops.index[2:-2, 2:-2, :, :2],
+        temp_data[:, :, :, np.newaxis] * \
             vs.maskT[2:-2, 2:-2, :, np.newaxis]
 
         salt_data = self._read_forcing(vs, 'salinity')[:, :, ::-1]
-        vs.salt[2:-2, 2:-2, :, :2] = salt_data[..., np.newaxis] * vs.maskT[2:-2, 2:-2, :, np.newaxis]
+        vs.salt = jax.ops.index_update(vs.salt, jax.ops.index[2:-2, 2:-2, :, :2],
+        salt_data[..., np.newaxis] * vs.maskT[2:-2, 2:-2, :, np.newaxis]
 
         # use Trenberth wind stress from MITgcm instead of ECMWF (also contained in ecmwf_4deg.cdf)
-        vs.taux[2:-2, 2:-2, :] = self._read_forcing(vs, 'tau_x')
-        vs.tauy[2:-2, 2:-2, :] = self._read_forcing(vs, 'tau_y')
+        vs.taux = jax.ops.index_update(vs.taux, jax.ops.index[2:-2, 2:-2, :],
+        self._read_forcing(vs, 'tau_x')
+        vs.tauy = jax.ops.index_update(vs.tauy, jax.ops.index[2:-2, 2:-2, :],
+        self._read_forcing(vs, 'tau_y')
 
         # heat flux
         with h5netcdf.File(DATA_FILES['ecmwf'], 'r') as ecmwf_data:
             qnec_var = ecmwf_data.variables['Q3']
-            vs.qnec[2:-2, 2:-2, :] = np.array(qnec_var, dtype=str(qnec_var.dtype)).transpose()
-            vs.qnec[vs.qnec <= -1e10] = 0.0
+            vs.qnec = jax.ops.index_update(vs.qnec, jax.ops.index[2:-2, 2:-2, :],
+        np.array(qnec_var, dtype=str(qnec_var.dtype)).transpose()
+            vs.qnec = jax.ops.index_update(vs.qnec, jax.ops.index[vs.qnec <= -1e10],
+        0.0
 
         q = self._read_forcing(vs, 'q_net')
-        vs.qnet[2:-2, 2:-2, :] = -q
-        vs.qnet[vs.qnet <= -1e10] = 0.0
+        vs.qnet = jax.ops.index_update(vs.qnet, jax.ops.index[2:-2, 2:-2, :],
+        -q
+        vs.qnet = jax.ops.index_update(vs.qnet, jax.ops.index[vs.qnet <= -1e10],
+        0.0
 
         fxa = np.sum(vs.qnet[2:-2, 2:-2, :] * vs.area_t[2:-2, 2:-2, np.newaxis]) \
               / 12 / np.sum(vs.area_t[2:-2, 2:-2])
         print(' removing an annual mean heat flux imbalance of %e W/m^2' % fxa)
-        vs.qnet[...] = (vs.qnet - fxa) * vs.maskT[:, :, -1, np.newaxis]
+        vs.qnet = jax.ops.index_update(vs.qnet, jax.ops.index[...],
+        (vs.qnet - fxa) * vs.maskT[:, :, -1, np.newaxis]
 
         # SST and SSS
-        vs.sst_clim[2:-2, 2:-2, :] = self._read_forcing(vs, 'sst')
-        vs.sss_clim[2:-2, 2:-2, :] = self._read_forcing(vs, 'sss')
+        vs.sst_clim = jax.ops.index_update(vs.sst_clim, jax.ops.index[2:-2, 2:-2, :],
+        self._read_forcing(vs, 'sst')
+        vs.sss_clim = jax.ops.index_update(vs.sss_clim, jax.ops.index[2:-2, 2:-2, :],
+        self._read_forcing(vs, 'sss')
 
         if vs.enable_idemix:
-            vs.forc_iw_bottom[2:-2, 2:-2] = self._read_forcing(vs, 'tidal_energy') / vs.rho_0
-            vs.forc_iw_surface[2:-2, 2:-2] = self._read_forcing(vs, 'wind_energy') / vs.rho_0 * 0.2
+            vs.forc_iw_bottom = jax.ops.index_update(vs.forc_iw_bottom, jax.ops.index[2:-2, 2:-2],
+        self._read_forcing(vs, 'tidal_energy') / vs.rho_0
+            vs.forc_iw_surface = jax.ops.index_update(vs.forc_iw_surface, jax.ops.index[2:-2, 2:-2],
+        self._read_forcing(vs, 'wind_energy') / vs.rho_0 * 0.2
 
     @veros_method
     def set_forcing(self, vs):
@@ -174,12 +194,15 @@ class GlobalFourDegreeSetup(VerosSetup):
         )
 
         # wind stress
-        vs.surface_taux[...] = (f1 * vs.taux[:, :, n1] + f2 * vs.taux[:, :, n2])
-        vs.surface_tauy[...] = (f1 * vs.tauy[:, :, n1] + f2 * vs.tauy[:, :, n2])
+        vs.surface_taux = jax.ops.index_update(vs.surface_taux, jax.ops.index[...],
+        (f1 * vs.taux[:, :, n1] + f2 * vs.taux[:, :, n2])
+        vs.surface_tauy = jax.ops.index_update(vs.surface_tauy, jax.ops.index[...],
+        (f1 * vs.tauy[:, :, n1] + f2 * vs.tauy[:, :, n2])
 
         # tke flux
         if vs.enable_tke:
-            vs.forc_tke_surface[1:-1, 1:-1] = np.sqrt((0.5 * (vs.surface_taux[1:-1, 1:-1] \
+            vs.forc_tke_surface = jax.ops.index_update(vs.forc_tke_surface, jax.ops.index[1:-1, 1:-1],
+        np.sqrt((0.5 * (vs.surface_taux[1:-1, 1:-1] \
                                                                 + vs.surface_taux[:-2, 1:-1]) / vs.rho_0)**2
                                                       + (0.5 * (vs.surface_tauy[1:-1, 1:-1] \
                                                                 + vs.surface_tauy[1:-1, :-2]) / vs.rho_0)**2)**(3. / 2.)
@@ -188,20 +211,24 @@ class GlobalFourDegreeSetup(VerosSetup):
         sst = f1 * vs.sst_clim[:, :, n1] + f2 * vs.sst_clim[:, :, n2]
         qnec = f1 * vs.qnec[:, :, n1] + f2 * vs.qnec[:, :, n2]
         qnet = f1 * vs.qnet[:, :, n1] + f2 * vs.qnet[:, :, n2]
-        vs.forc_temp_surface[...] = (qnet + qnec * (sst - vs.temp[:, :, -1, vs.tau])) \
+        vs.forc_temp_surface = jax.ops.index_update(vs.forc_temp_surface, jax.ops.index[...],
+        (qnet + qnec * (sst - vs.temp[:, :, -1, vs.tau])) \
                                        * vs.maskT[:, :, -1] / cp_0 / vs.rho_0
 
         # salinity restoring
         t_rest = 30 * 86400.0
         sss = f1 * vs.sss_clim[:, :, n1] + f2 * vs.sss_clim[:, :, n2]
-        vs.forc_salt_surface[:] = 1. / t_rest * \
+        vs.forc_salt_surface = jax.ops.index_update(vs.forc_salt_surface, jax.ops.index[:],
+        1. / t_rest * \
             (sss - vs.salt[:, :, -1, vs.tau]) * vs.maskT[:, :, -1] * vs.dzt[-1]
 
         # apply simple ice mask
         mask = np.logical_and(vs.temp[:, :, -1, vs.tau] * vs.maskT[:, :, -1] < -1.8,
                               vs.forc_temp_surface < 0.)
-        vs.forc_temp_surface[mask] = 0.0
-        vs.forc_salt_surface[mask] = 0.0
+        vs.forc_temp_surface = jax.ops.index_update(vs.forc_temp_surface, jax.ops.index[mask],
+        0.0
+        vs.forc_salt_surface = jax.ops.index_update(vs.forc_salt_surface, jax.ops.index[mask],
+        0.0
 
     @veros.veros_method
     def set_diagnostics(self, vs):

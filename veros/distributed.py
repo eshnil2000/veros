@@ -1,3 +1,5 @@
+import jax.ops
+
 from . import runtime_settings as rs, runtime_state as rst
 from .decorators import veros_method, dist_context_only
 
@@ -243,15 +245,15 @@ def exchange_overlap(vs, arr, var_grid):
 
     for future, recv_idx, recv_arr in receive_futures:
         future.wait()
-        arr[recv_idx] = recv_arr
+        arr = jax.ops.index_update(arr, jax.ops.index[recv_idx], recv_arr)
 
 
 @dist_context_only
 @veros_method
 def exchange_cyclic_boundaries(vs, arr):
     if rs.num_proc[0] == 1:
-        arr[-2:, ...] = arr[2:4, ...]
-        arr[:2, ...] = arr[-4:-2, ...]
+        arr = jax.ops.index_update(arr, jax.ops.index[-2:, ...], arr[2:4, ...])
+        arr = jax.ops.index_update(arr, jax.ops.index[:2, ...], arr[-4:-2, ...])
         return
 
     ix, iy = proc_rank_to_index(rst.proc_rank)
@@ -276,7 +278,7 @@ def exchange_cyclic_boundaries(vs, arr):
         recvbuf=get_array_buffer(vs, recv_arr), source=other_proc, recvtag=10
     )
 
-    arr[recv_idx] = recv_arr
+    arr = jax.ops.index_update(arr, jax.ops.index[recv_idx], recv_arr)
 
 
 @dist_context_only
@@ -373,11 +375,11 @@ def _gather_1d(vs, arr, dim):
 
         out_shape = ((vs.nx + 4, vs.ny + 4)[dim],) + arr.shape[1:]
         out = np.empty(out_shape, dtype=arr.dtype)
-        out[gidx] = sendbuf
+        out = jax.ops.index_update(out, jax.ops.index[gidx], sendbuf)
 
         for future, idx, val in buffer_list:
             future.wait()
-            out[idx] = val
+            out = jax.ops.index_update(out, jax.ops.index[idx], val)
 
         return out
 
@@ -409,11 +411,11 @@ def _gather_xy(vs, arr):
 
         out_shape = (vs.nx + 4, vs.ny + 4) + arr.shape[2:]
         out = np.empty(out_shape, dtype=arr.dtype)
-        out[gidx] = sendbuf
+        out = jax.ops.index_update(out, jax.ops.index[gidx], sendbuf)
 
         for future, idx, val in buffer_list:
             future.wait()
-            out[idx] = val
+            out = jax.ops.index_update(out, jax.ops.index[idx], val)
 
         return out
     else:
@@ -487,7 +489,7 @@ def _scatter_1d(vs, arr, dim):
         recvbuf = np.empty_like(arr[local_slice])
         rs.mpi_comm.Recv(get_array_buffer(vs, recvbuf), source=0, tag=40)
 
-    arr[local_slice] = recvbuf
+    arr = jax.ops.index_update(arr, jax.ops.index[local_slice], recvbuf)
 
     exchange_overlap(vs, arr, ['xt' if dim == 0 else 'yt'])
 
@@ -516,7 +518,7 @@ def _scatter_xy(vs, arr):
         recvbuf = np.empty_like(arr[local_slice])
         rs.mpi_comm.Recv(get_array_buffer(vs, recvbuf), source=0, tag=50)
 
-    arr[local_slice] = recvbuf
+    arr = jax.ops.index_update(arr, jax.ops.index[local_slice], recvbuf)
 
     exchange_overlap(vs, arr, ['xt', 'yt'])
 

@@ -1,4 +1,5 @@
 from loguru import logger
+import jax.ops
 
 from .. import density, utilities
 from ... import veros_method
@@ -34,30 +35,42 @@ def isoneutral_diffusion_pre(vs):
     """
     gradients at top face of T cells
     """
-    dTdz[:, :, :-1] = vs.maskW[:, :, :-1] * \
+    dTdz = jax.ops.index_update(dTdz, jax.ops.index[:, :, :-1],
+        vs.maskW[:, :, :-1] * \
         (vs.temp[:, :, 1:, vs.tau] - vs.temp[:, :, :-1, vs.tau]) / \
         vs.dzw[np.newaxis, np.newaxis, :-1]
-    dSdz[:, :, :-1] = vs.maskW[:, :, :-1] * \
+    )
+    dSdz = jax.ops.index_update(dSdz, jax.ops.index[:, :, :-1],
+        vs.maskW[:, :, :-1] * \
         (vs.salt[:, :, 1:, vs.tau] - vs.salt[:, :, :-1, vs.tau]) / \
         vs.dzw[np.newaxis, np.newaxis, :-1]
+    )
 
     """
     gradients at eastern face of T cells
     """
-    dTdx[:-1, :, :] = vs.maskU[:-1, :, :] * (vs.temp[1:, :, :, vs.tau] - vs.temp[:-1, :, :, vs.tau]) \
+    dTdx = jax.ops.index_update(dTdx, jax.ops.index[:-1, :, :],
+        vs.maskU[:-1, :, :] * (vs.temp[1:, :, :, vs.tau] - vs.temp[:-1, :, :, vs.tau]) \
         / (vs.dxu[:-1, np.newaxis, np.newaxis] * vs.cost[np.newaxis, :, np.newaxis])
-    dSdx[:-1, :, :] = vs.maskU[:-1, :, :] * (vs.salt[1:, :, :, vs.tau] - vs.salt[:-1, :, :, vs.tau]) \
+    )
+    dSdx = jax.ops.index_update(dSdx, jax.ops.index[:-1, :, :],
+        vs.maskU[:-1, :, :] * (vs.salt[1:, :, :, vs.tau] - vs.salt[:-1, :, :, vs.tau]) \
         / (vs.dxu[:-1, np.newaxis, np.newaxis] * vs.cost[np.newaxis, :, np.newaxis])
+    )
 
     """
     gradients at northern face of T cells
     """
-    dTdy[:, :-1, :] = vs.maskV[:, :-1, :] * \
+    dTdy = jax.ops.index_update(dTdy, jax.ops.index[:, :-1, :],
+        vs.maskV[:, :-1, :] * \
         (vs.temp[:, 1:, :, vs.tau] - vs.temp[:, :-1, :, vs.tau]) \
         / vs.dyu[np.newaxis, :-1, np.newaxis]
-    dSdy[:, :-1, :] = vs.maskV[:, :-1, :] * \
+    )
+    dSdy = jax.ops.index_update(dSdy, jax.ops.index[:, :-1, :],
+        vs.maskV[:, :-1, :] * \
         (vs.salt[:, 1:, :, vs.tau] - vs.salt[:, :-1, :, vs.tau]) \
         / vs.dyu[np.newaxis, :-1, np.newaxis]
+    )
 
     def dm_taper(sx):
         """
@@ -69,9 +82,13 @@ def isoneutral_diffusion_pre(vs):
     Compute Ai_ez and K11 on center of east face of T cell.
     """
     diffloc = allocate(vs, ('xt', 'yt', 'zt'))
-    diffloc[1:-2, 2:-2, 1:] = 0.25 * (vs.K_iso[1:-2, 2:-2, 1:] + vs.K_iso[1:-2, 2:-2, :-1]
+    diffloc = jax.ops.index_update(diffloc, jax.ops.index[1:-2, 2:-2, 1:],
+        0.25 * (vs.K_iso[1:-2, 2:-2, 1:] + vs.K_iso[1:-2, 2:-2, :-1]
                                       + vs.K_iso[2:-1, 2:-2, 1:] + vs.K_iso[2:-1, 2:-2, :-1])
-    diffloc[1:-2, 2:-2, 0] = 0.5 * (vs.K_iso[1:-2, 2:-2, 0] + vs.K_iso[2:-1, 2:-2, 0])
+    )
+    diffloc = jax.ops.index_update(diffloc, jax.ops.index[1:-2, 2:-2, 0],
+        0.5 * (vs.K_iso[1:-2, 2:-2, 0] + vs.K_iso[2:-1, 2:-2, 0])
+    )
 
     sumz = allocate(vs, ('xu', 'yt', 'zw'))[1:-2, 2:-2]
     for kr in range(2):
@@ -85,16 +102,22 @@ def isoneutral_diffusion_pre(vs):
             taper = dm_taper(sxe)
             sumz[:, :, ki:] += vs.dzw[np.newaxis, np.newaxis, :-1 + kr or None] * vs.maskU[1:-2, 2:-2, ki:] \
                 * np.maximum(vs.K_iso_steep, diffloc[1:-2, 2:-2, ki:] * taper)
-            vs.Ai_ez[1:-2, 2:-2, ki:, ip, kr] = taper * sxe * vs.maskU[1:-2, 2:-2, ki:]
-    vs.K_11[1:-2, 2:-2, :] = sumz / (4. * vs.dzt[np.newaxis, np.newaxis, :])
+            vs.Ai_ez = jax.ops.index_update(vs.Ai_ez, jax.ops.index[1:-2, 2:-2, ki:, ip, kr],
+                taper * sxe * vs.maskU[1:-2, 2:-2, ki:])
+    vs.K_11 = jax.ops.index_update(vs.K_11, jax.ops.index[1:-2, 2:-2, :],
+        sumz / (4. * vs.dzt[np.newaxis, np.newaxis, :]))
 
     """
     Compute Ai_nz and K_22 on center of north face of T cell.
     """
-    diffloc[...] = 0
-    diffloc[2:-2, 1:-2, 1:] = 0.25 * (vs.K_iso[2:-2, 1:-2, 1:] + vs.K_iso[2:-2, 1:-2, :-1]
+    diffloc = jax.ops.index_update(diffloc, jax.ops.index[...],
+        0)
+    diffloc = jax.ops.index_update(diffloc, jax.ops.index[2:-2, 1:-2, 1:],
+        0.25 * (vs.K_iso[2:-2, 1:-2, 1:] + vs.K_iso[2:-2, 1:-2, :-1]
                                       + vs.K_iso[2:-2, 2:-1, 1:] + vs.K_iso[2:-2, 2:-1, :-1])
-    diffloc[2:-2, 1:-2, 0] = 0.5 * (vs.K_iso[2:-2, 1:-2, 0] + vs.K_iso[2:-2, 2:-1, 0])
+    )
+    diffloc = jax.ops.index_update(diffloc, jax.ops.index[2:-2, 1:-2, 0],
+        0.5 * (vs.K_iso[2:-2, 1:-2, 0] + vs.K_iso[2:-2, 2:-1, 0]))
 
     sumz = allocate(vs, ('xt', 'yu', 'zw'))[2:-2, 1:-2]
     for kr in range(2):
@@ -108,8 +131,11 @@ def isoneutral_diffusion_pre(vs):
             taper = dm_taper(syn)
             sumz[:, :, ki:] += vs.dzw[np.newaxis, np.newaxis, :-1 + kr or None] \
                 * vs.maskV[2:-2, 1:-2, ki:] * np.maximum(vs.K_iso_steep, diffloc[2:-2, 1:-2, ki:] * taper)
-            vs.Ai_nz[2:-2, 1:-2, ki:, jp, kr] = taper * syn * vs.maskV[2:-2, 1:-2, ki:]
-    vs.K_22[2:-2, 1:-2, :] = sumz / (4. * vs.dzt[np.newaxis, np.newaxis, :])
+            vs.Ai_nz = jax.ops.index_update(vs.Ai_nz, jax.ops.index[2:-2, 1:-2, ki:, jp, kr],
+                taper * syn * vs.maskV[2:-2, 1:-2, ki:])
+    vs.K_22 = jax.ops.index_update(vs.K_22, jax.ops.index[2:-2, 1:-2, :],
+        sumz / (4. * vs.dzt[np.newaxis, np.newaxis, :])
+    )
 
     """
     compute Ai_bx, Ai_by and K33 on top face of T cell.
@@ -129,7 +155,8 @@ def isoneutral_diffusion_pre(vs):
             taper = dm_taper(sxb)
             sumx += vs.dxu[1 + ip:-3 + ip, np.newaxis, np.newaxis] * \
                 vs.K_iso[2:-2, 2:-2, :-1] * taper * sxb**2 * vs.maskW[2:-2, 2:-2, :-1]
-            vs.Ai_bx[2:-2, 2:-2, :-1, ip, kr] = taper * sxb * vs.maskW[2:-2, 2:-2, :-1]
+            vs.Ai_bx = jax.ops.index_update(vs.Ai_bx, jax.ops.index[2:-2, 2:-2, :-1, ip, kr],
+                taper * sxb * vs.maskW[2:-2, 2:-2, :-1])
 
         # northward slopes at the top of T cells
         for jp in range(2):
@@ -140,11 +167,14 @@ def isoneutral_diffusion_pre(vs):
             taper = dm_taper(syb)
             sumy += facty[np.newaxis, :, np.newaxis] * vs.K_iso[2:-2, 2:-2, :-1] \
                 * taper * syb**2 * vs.maskW[2:-2, 2:-2, :-1]
-            vs.Ai_by[2:-2, 2:-2, :-1, jp, kr] = taper * syb * vs.maskW[2:-2, 2:-2, :-1]
+            vs.Ai_by = jax.ops.index_update(vs.Ai_by, jax.ops.index[2:-2, 2:-2, :-1, jp, kr],
+                taper * syb * vs.maskW[2:-2, 2:-2, :-1])
 
-    vs.K_33[2:-2, 2:-2, :-1] = sumx / (4 * vs.dxt[2:-2, np.newaxis, np.newaxis]) + \
+    vs.K_33 = jax.ops.index_update(vs.K_33, jax.ops.index[2:-2, 2:-2, :-1],
+        sumx / (4 * vs.dxt[2:-2, np.newaxis, np.newaxis]) + \
         sumy / (4 * vs.dyt[np.newaxis, 2:-2, np.newaxis] * vs.cost[np.newaxis, 2:-2, np.newaxis])
-    vs.K_33[2:-2, 2:-2, -1] = 0.
+    )
+    vs.K_33 = jax.ops.index_update(vs.K_33, jax.ops.index[2:-2, 2:-2, -1], 0.)
 
 
 @veros_method
@@ -160,14 +190,16 @@ def isoneutral_diag_streamfunction(vs):
     """
     diffloc = 0.25 * (K_gm_pad[1:-2, 2:-2, 1:-1] + K_gm_pad[1:-2, 2:-2, :-2] +
                       K_gm_pad[2:-1, 2:-2, 1:-1] + K_gm_pad[2:-1, 2:-2, :-2])
-    vs.B2_gm[1:-2, 2:-2, :] = 0.25 * diffloc * np.sum(vs.Ai_ez[1:-2, 2:-2, ...], axis=(3, 4))
+    vs.B2_gm = jax.ops.index_update(vs.B2_gm, jax.ops.index[1:-2, 2:-2, :],
+        0.25 * diffloc * np.sum(vs.Ai_ez[1:-2, 2:-2, ...], axis=(3, 4)))
 
     """
     zonal component at north face of 'T' cells
     """
     diffloc = 0.25 * (K_gm_pad[2:-2, 1:-2, 1:-1] + K_gm_pad[2:-2, 1:-2, :-2] +
                       K_gm_pad[2:-2, 2:-1, 1:-1] + K_gm_pad[2:-2, 2:-1, :-2])
-    vs.B1_gm[2:-2, 1:-2, :] = -0.25 * diffloc * np.sum(vs.Ai_nz[2:-2, 1:-2, ...], axis=(3, 4))
+    vs.B1_gm = jax.ops.index_update(vs.B1_gm, jax.ops.index[2:-2, 1:-2, :],
+        -0.25 * diffloc * np.sum(vs.Ai_nz[2:-2, 1:-2, ...], axis=(3, 4)))
 
 
 @veros_method(dist_safe=False, local_variables=[

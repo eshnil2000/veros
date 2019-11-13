@@ -158,11 +158,13 @@ class Overturning(VerosDiagnostic):
                 )
 
         # streamfunction on geopotentials
-        self.vsf_depth[2:-2, :] += np.cumsum(zonal_sum(vs,
+        self.vsf_depth = jax.ops.index_add(self.vsf_depth, jax.ops.index[2:-2, :],
+            np.cumsum(zonal_sum(vs,
             vs.dxt[2:-2, np.newaxis, np.newaxis]
             * vs.cosu[np.newaxis, 2:-2, np.newaxis]
             * vs.v[2:-2, 2:-2, :, vs.tau]
             * vs.maskV[2:-2, 2:-2, :]) * vs.dzt[np.newaxis, :], axis=1)
+        )
 
         if vs.enable_neutral_diffusion and vs.enable_skew_diffusion:
             # streamfunction for eddy driven velocity on geopotentials
@@ -172,13 +174,14 @@ class Overturning(VerosDiagnostic):
                 * vs.B1_gm[2:-2, 2:-2, :])
 
         # interpolate from isopycnals to depth
-        self.vsf_iso[2:-2, :] += self._interpolate_along_axis(vs,
-                                                              z_sig[2:-2, :], trans[2:-2, :],
-                                                              self.zarea[2:-2, :], 1)
+        self.vsf_iso = jax.ops.index_add(self.vsf_iso, jax.ops.index[2:-2, :],
+            self._interpolate_along_axis(vs,
+            z_sig[2:-2, :], trans[2:-2, :],
+            self.zarea[2:-2, :], 1)
+        )
         if vs.enable_neutral_diffusion and vs.enable_skew_diffusion:
-            self.bolus_iso[2:-2, :] += self._interpolate_along_axis(vs,
-                                                                    z_sig[2:-2, :], bolus_trans[2:-2, :],
-                                                                    self.zarea[2:-2, :], 1)
+            self.bolus_iso = jax.ops.index_add(self.bolus_iso, jax.ops.index[2:-2, :],
+                self._interpolate_along_axis(vs, z_sig[2:-2, :], bolus_trans[2:-2, :], self.zarea[2:-2, :], 1))
 
         self.nitts += 1
 

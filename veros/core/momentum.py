@@ -1,3 +1,5 @@
+import jax.ops
+
 from .. import veros_method
 from ..variables import allocate
 from . import friction, isoneutral, streamfunction
@@ -12,13 +14,16 @@ def momentum(vs):
     """
     time tendency due to Coriolis force
     """
-    vs.du_cor[2:-2, 2:-2] = vs.maskU[2:-2, 2:-2] \
+    vs.du_cor = jax.ops.index_update(vs.du_cor, jax.ops.index[2:-2, 2:-2],
+        vs.maskU[2:-2, 2:-2] \
         * (vs.coriolis_t[2:-2, 2:-2, np.newaxis] * (vs.v[2:-2, 2:-2, :, vs.tau] + vs.v[2:-2, 1:-3, :, vs.tau])
            * vs.dxt[2:-2, np.newaxis, np.newaxis] / vs.dxu[2:-2, np.newaxis, np.newaxis]
             + vs.coriolis_t[3:-1, 2:-2, np.newaxis] *
            (vs.v[3:-1, 2:-2, :, vs.tau] + vs.v[3:-1, 1:-3, :, vs.tau])
            * vs.dxt[3:-1, np.newaxis, np.newaxis] / vs.dxu[2:-2, np.newaxis, np.newaxis]) * 0.25
-    vs.dv_cor[2:-2, 2:-2] = -vs.maskV[2:-2, 2:-2] \
+    )
+    vs.dv_cor = jax.ops.index_update(vs.dv_cor, jax.ops.index[2:-2, 2:-2],
+        -vs.maskV[2:-2, 2:-2] \
         * (vs.coriolis_t[2:-2, 2:-2, np.newaxis] * (vs.u[1:-3, 2:-2, :, vs.tau] + vs.u[2:-2, 2:-2, :, vs.tau])
            * vs.dyt[np.newaxis, 2:-2, np.newaxis] * vs.cost[np.newaxis, 2:-2, np.newaxis]
            / (vs.dyu[np.newaxis, 2:-2, np.newaxis] * vs.cosu[np.newaxis, 2:-2, np.newaxis])
@@ -26,19 +31,23 @@ def momentum(vs):
            * (vs.u[1:-3, 3:-1, :, vs.tau] + vs.u[2:-2, 3:-1, :, vs.tau])
            * vs.dyt[np.newaxis, 3:-1, np.newaxis] * vs.cost[np.newaxis, 3:-1, np.newaxis]
            / (vs.dyu[np.newaxis, 2:-2, np.newaxis] * vs.cosu[np.newaxis, 2:-2, np.newaxis])) * 0.25
+    )
 
     """
     time tendency due to metric terms
     """
     if vs.coord_degree:
-        vs.du_cor[2:-2, 2:-2] += vs.maskU[2:-2, 2:-2] * 0.125 * vs.tantr[np.newaxis, 2:-2, np.newaxis] \
+        vs.du_cor = jax.ops.index_add(vs.du_cor, jax.ops.index[2:-2, 2:-2],
+            vs.maskU[2:-2, 2:-2] * 0.125 * vs.tantr[np.newaxis, 2:-2, np.newaxis] \
             * ((vs.u[2:-2, 2:-2, :, vs.tau] + vs.u[1:-3, 2:-2, :, vs.tau])
                * (vs.v[2:-2, 2:-2, :, vs.tau] + vs.v[2:-2, 1:-3, :, vs.tau])
                * vs.dxt[2:-2, np.newaxis, np.newaxis] / vs.dxu[2:-2, np.newaxis, np.newaxis]
                + (vs.u[3:-1, 2:-2, :, vs.tau] + vs.u[2:-2, 2:-2, :, vs.tau])
                * (vs.v[3:-1, 2:-2, :, vs.tau] + vs.v[3:-1, 1:-3, :, vs.tau])
                * vs.dxt[3:-1, np.newaxis, np.newaxis] / vs.dxu[2:-2, np.newaxis, np.newaxis])
-        vs.dv_cor[2:-2, 2:-2] += -vs.maskV[2:-2, 2:-2] * 0.125 \
+        )
+        vs.dv_cor = jax.ops.index_add(vs.dv_cor, jax.ops.index[2:-2, 2:-2],
+            -vs.maskV[2:-2, 2:-2] * 0.125 \
             * (vs.tantr[np.newaxis, 2:-2, np.newaxis] * (vs.u[2:-2, 2:-2, :, vs.tau] + vs.u[1:-3, 2:-2, :, vs.tau])**2
                * vs.dyt[np.newaxis, 2:-2, np.newaxis] * vs.cost[np.newaxis, 2:-2, np.newaxis]
                / (vs.dyu[np.newaxis, 2:-2, np.newaxis] * vs.cosu[np.newaxis, 2:-2, np.newaxis])
@@ -46,35 +55,46 @@ def momentum(vs):
                * (vs.u[2:-2, 3:-1, :, vs.tau] + vs.u[1:-3, 3:-1, :, vs.tau])**2
                * vs.dyt[np.newaxis, 3:-1, np.newaxis] * vs.cost[np.newaxis, 3:-1, np.newaxis]
                / (vs.dyu[np.newaxis, 2:-2, np.newaxis] * vs.cosu[np.newaxis, 2:-2, np.newaxis]))
+        )
 
     """
     transfer to time tendencies
     """
-    vs.du[2:-2, 2:-2, :, vs.tau] = vs.du_cor[2:-2, 2:-2]
-    vs.dv[2:-2, 2:-2, :, vs.tau] = vs.dv_cor[2:-2, 2:-2]
+    vs.du = jax.ops.index_update(vs.du, jax.ops.index[2:-2, 2:-2, :, vs.tau],
+        vs.du_cor[2:-2, 2:-2])
+    vs.dv = jax.ops.index_update(vs.dv, jax.ops.index[2:-2, 2:-2, :, vs.tau],
+        vs.dv_cor[2:-2, 2:-2])
 
     """
     wind stress forcing
     """
     if vs.pyom_compatibility_mode:
-        vs.du[2:-2, 2:-2, -1, vs.tau] += vs.maskU[2:-2, 2:-2, -1] * vs.surface_taux[2:-2, 2:-2] / vs.dzt[-1]
-        vs.dv[2:-2, 2:-2, -1, vs.tau] += vs.maskV[2:-2, 2:-2, -1] * vs.surface_tauy[2:-2, 2:-2] / vs.dzt[-1]
+        vs.du = jax.ops.index_add(vs.du, jax.ops.index[2:-2, 2:-2, -1, vs.tau],
+            vs.maskU[2:-2, 2:-2, -1] * vs.surface_taux[2:-2, 2:-2] / vs.dzt[-1]
+        )
+        vs.dv = jax.ops.index_add(vs.dv, jax.ops.index[2:-2, 2:-2, -1, vs.tau],
+            vs.maskV[2:-2, 2:-2, -1] * vs.surface_tauy[2:-2, 2:-2] / vs.dzt[-1]
+        )
     else:
-        vs.du[2:-2, 2:-2, -1, vs.tau] += vs.maskU[2:-2, 2:-2, -1] * vs.surface_taux[2:-2, 2:-2] / vs.dzt[-1] / vs.rho_0
-        vs.dv[2:-2, 2:-2, -1, vs.tau] += vs.maskV[2:-2, 2:-2, -1] * vs.surface_tauy[2:-2, 2:-2] / vs.dzt[-1] / vs.rho_0
+        vs.du = jax.ops.index_add(vs.du, jax.ops.index[2:-2, 2:-2, -1, vs.tau],
+            vs.maskU[2:-2, 2:-2, -1] * vs.surface_taux[2:-2, 2:-2] / vs.dzt[-1] / vs.rho_0)
+        vs.dv = jax.ops.index_add(vs.dv, jax.ops.index[2:-2, 2:-2, -1, vs.tau],
+            vs.maskV[2:-2, 2:-2, -1] * vs.surface_tauy[2:-2, 2:-2] / vs.dzt[-1] / vs.rho_0)
 
     """
     advection
     """
     momentum_advection(vs)
-    vs.du[:, :, :, vs.tau] += vs.du_adv
-    vs.dv[:, :, :, vs.tau] += vs.dv_adv
+    vs.du = jax.ops.index_add(vs.du, jax.ops.index[:, :, :, vs.tau],
+        vs.du_adv)
+    vs.dv = jax.ops.index_add(vs.dv, jax.ops.index[:, :, :, vs.tau],
+        vs.dv_adv)
 
     with vs.timers['friction']:
         """
         vertical friction
         """
-        vs.K_diss_v[...] = 0.0
+        vs.K_diss_v = jax.ops.index_update(vs.K_diss_v, jax.ops.index[...], 0.0)
         if vs.enable_implicit_vert_friction:
             friction.implicit_vert_friction(vs)
         if vs.enable_explicit_vert_friction:
@@ -97,7 +117,7 @@ def momentum(vs):
         """
         Rayleigh and bottom friction
         """
-        vs.K_diss_bot[...] = 0.0
+        vs.K_diss_bot = jax.ops.index_update(vs.K_diss_bot, jax.ops.index[...], 0.0)
         if vs.enable_ray_friction:
             friction.rayleigh_friction(vs)
         if vs.enable_bottom_friction:
@@ -127,19 +147,24 @@ def vertical_velocity(vs):
     """
     fxa = allocate(vs, ('xt', 'yt', 'zw'))[1:, 1:]
     # integrate from bottom to surface to see error in w
-    fxa[:, :, 0] = -vs.maskW[1:, 1:, 0] * vs.dzt[0] * \
+    fxa = jax.ops.index_update(fxa, jax.ops.index[:, :, 0],
+        -vs.maskW[1:, 1:, 0] * vs.dzt[0] * \
         ((vs.u[1:, 1:, 0, vs.taup1] - vs.u[:-1, 1:, 0, vs.taup1])
         / (vs.cost[np.newaxis, 1:] * vs.dxt[1:, np.newaxis])
         + (vs.cosu[np.newaxis, 1:] * vs.v[1:, 1:, 0, vs.taup1]
             - vs.cosu[np.newaxis, :-1] * vs.v[1:, :-1, 0, vs.taup1])
         / (vs.cost[np.newaxis, 1:] * vs.dyt[np.newaxis, 1:]))
-    fxa[:, :, 1:] = -vs.maskW[1:, 1:, 1:] * vs.dzt[np.newaxis, np.newaxis, 1:] \
+    )
+    fxa = jax.ops.index_update(fxa, jax.ops.index[:, :, 1:],
+        -vs.maskW[1:, 1:, 1:] * vs.dzt[np.newaxis, np.newaxis, 1:] \
         * ((vs.u[1:, 1:, 1:, vs.taup1] - vs.u[:-1, 1:, 1:, vs.taup1])
         / (vs.cost[np.newaxis, 1:, np.newaxis] * vs.dxt[1:, np.newaxis, np.newaxis])
         + (vs.cosu[np.newaxis, 1:, np.newaxis] * vs.v[1:, 1:, 1:, vs.taup1]
             - vs.cosu[np.newaxis, :-1, np.newaxis] * vs.v[1:, :-1, 1:, vs.taup1])
         / (vs.cost[np.newaxis, 1:, np.newaxis] * vs.dyt[np.newaxis, 1:, np.newaxis]))
-    vs.w[1:, 1:, :, vs.taup1] = np.cumsum(fxa, axis=2)
+    )
+    vs.w = jax.ops.index_update(vs.w, jax.ops.index[1:, 1:, :, vs.taup1],
+        np.cumsum(fxa, axis=2))
 
 
 @veros_method
@@ -160,38 +185,59 @@ def momentum_advection(vs):
     """
     for zonal momentum
     """
-    vs.flux_top[...] = 0.
-    vs.flux_east[1:-2, 2:-2] = 0.25 * (vs.u[1:-2, 2:-2, :, vs.tau] \
+    vs.flux_top = jax.ops.index_update(vs.flux_top, jax.ops.index[...],
+        0.)
+    vs.flux_east = jax.ops.index_update(vs.flux_east, jax.ops.index[1:-2, 2:-2],
+        0.25 * (vs.u[1:-2, 2:-2, :, vs.tau] \
                                      + vs.u[2:-1, 2:-2, :, vs.tau]) \
                                     * (utr[2:-1, 2:-2] + utr[1:-2, 2:-2])
-    vs.flux_north[2:-2, 1:-2] = 0.25 * (vs.u[2:-2, 1:-2, :, vs.tau] \
+    )
+    vs.flux_north = jax.ops.index_update(vs.flux_north, jax.ops.index[2:-2, 1:-2],
+        0.25 * (vs.u[2:-2, 1:-2, :, vs.tau] \
                                       + vs.u[2:-2, 2:-1, :, vs.tau]) \
                                      * (vtr[3:-1, 1:-2] + vtr[2:-2, 1:-2])
-    vs.flux_top[2:-2, 2:-2, :-1] = 0.25 * (vs.u[2:-2, 2:-2, 1:, vs.tau] \
+    )
+    vs.flux_top = jax.ops.index_update(vs.flux_top, jax.ops.index[2:-2, 2:-2, :-1],
+        0.25 * (vs.u[2:-2, 2:-2, 1:, vs.tau] \
                                          + vs.u[2:-2, 2:-2, :-1, vs.tau]) \
                                         * (wtr[2:-2, 2:-2, :-1] + wtr[3:-1, 2:-2, :-1])
-    vs.du_adv[2:-2, 2:-2] = -vs.maskU[2:-2, 2:-2] * (vs.flux_east[2:-2, 2:-2] - vs.flux_east[1:-3, 2:-2]
+    )
+    vs.du_adv = jax.ops.index_update(vs.du_adv, jax.ops.index[2:-2, 2:-2],
+        -vs.maskU[2:-2, 2:-2] * (vs.flux_east[2:-2, 2:-2] - vs.flux_east[1:-3, 2:-2]
                                                    + vs.flux_north[2:-2, 2:-2] - vs.flux_north[2:-2, 1:-3]) \
                             / (vs.dzt[np.newaxis, np.newaxis, :] * vs.area_u[2:-2, 2:-2, np.newaxis])
+    )
 
     tmp = -vs.maskU / (vs.dzt * vs.area_u[:, :, np.newaxis])
     vs.du_adv += tmp * vs.flux_top
-    vs.du_adv[:, :, 1:] += tmp[:, :, 1:] * -vs.flux_top[:, :, :-1]
+    vs.du_adv = jax.ops.index_add(vs.du_adv, jax.ops.index[:, :, 1:],
+        tmp[:, :, 1:] * -vs.flux_top[:, :, :-1])
 
     """
     for meridional momentum
     """
-    vs.flux_top[...] = 0.
-    vs.flux_east[1:-2, 2:-2] = 0.25 * (vs.v[1:-2, 2:-2, :, vs.tau]
+    vs.flux_top = jax.ops.index_update(vs.flux_top, jax.ops.index[...],
+        0.)
+    vs.flux_east = jax.ops.index_update(vs.flux_east, jax.ops.index[1:-2, 2:-2],
+        0.25 * (vs.v[1:-2, 2:-2, :, vs.tau]
                                      + vs.v[2:-1, 2:-2, :, vs.tau]) * (utr[1:-2, 3:-1] + utr[1:-2, 2:-2])
-    vs.flux_north[2:-2, 1:-2] = 0.25 * (vs.v[2:-2, 1:-2, :, vs.tau]
+    )
+    vs.flux_north = jax.ops.index_update(vs.flux_north, jax.ops.index[2:-2, 1:-2],
+        0.25 * (vs.v[2:-2, 1:-2, :, vs.tau]
                                       + vs.v[2:-2, 2:-1, :, vs.tau]) * (vtr[2:-2, 2:-1] + vtr[2:-2, 1:-2])
-    vs.flux_top[2:-2, 2:-2, :-1] = 0.25 * (vs.v[2:-2, 2:-2, 1:, vs.tau]
+    )
+    vs.flux_top = jax.ops.index_update(vs.flux_top, jax.ops.index[2:-2, 2:-2, :-1],
+        0.25 * (vs.v[2:-2, 2:-2, 1:, vs.tau]
                                          + vs.v[2:-2, 2:-2, :-1, vs.tau]) * (wtr[2:-2, 2:-2, :-1] + wtr[2:-2, 3:-1, :-1])
-    vs.dv_adv[2:-2, 2:-2] = -vs.maskV[2:-2, 2:-2] * (vs.flux_east[2:-2, 2:-2] - vs.flux_east[1:-3, 2:-2]
+    )
+    vs.dv_adv = jax.ops.index_update(vs.dv_adv, jax.ops.index[2:-2, 2:-2],
+        -vs.maskV[2:-2, 2:-2] * (vs.flux_east[2:-2, 2:-2] - vs.flux_east[1:-3, 2:-2]
                                                    + vs.flux_north[2:-2, 2:-2] - vs.flux_north[2:-2, 1:-3]) \
                             / (vs.dzt * vs.area_v[2:-2, 2:-2, np.newaxis])
+    )
     tmp = vs.dzt * vs.area_v[:, :, np.newaxis]
-    vs.dv_adv[:, :, 0] += -vs.maskV[:, :, 0] * vs.flux_top[:, :, 0] / tmp[:, :, 0]
-    vs.dv_adv[:, :, 1:] += -vs.maskV[:, :, 1:] \
-        * (vs.flux_top[:, :, 1:] - vs.flux_top[:, :, :-1]) / tmp[:, :, 1:]
+    vs.dv_adv = jax.ops.index_add(vs.dv_adv, jax.ops.index[:, :, 0],
+        -vs.maskV[:, :, 0] * vs.flux_top[:, :, 0] / tmp[:, :, 0])
+    vs.dv_adv = jax.ops.index_add(vs.dv_adv, jax.ops.index[:, :, 1:],
+        -vs.maskV[:, :, 1:] \
+        * (vs.flux_top[:, :, 1:] - vs.flux_top[:, :, :-1]) / tmp[:, :, 1:])

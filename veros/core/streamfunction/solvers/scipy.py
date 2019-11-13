@@ -1,4 +1,5 @@
 from loguru import logger
+import jax.ops
 import scipy.sparse
 import scipy.sparse.linalg as spalg
 
@@ -53,7 +54,7 @@ class SciPySolver(LinearSolver):
         if rs.backend == 'bohrium':
             linear_solution = np.asarray(linear_solution)
 
-        sol[...] = linear_solution.reshape(vs.nx + 4, vs.ny + 4)
+        sol = jax.ops.index_update(sol, jax.ops.index[...], linear_solution.reshape(vs.nx + 4, vs.ny + 4))
 
     @veros_method
     def solve(self, vs, rhs, sol, boundary_val=None):
@@ -76,7 +77,7 @@ class SciPySolver(LinearSolver):
 
         self._scipy_solver(vs, rhs_global, sol_global, boundary_val=boundary_val)
 
-        sol[...] = distributed.scatter(vs, sol_global, ('xt', 'yt'))
+        sol = jax.ops.index_update(sol, jax.ops.index[...], distributed.scatter(vs, sol_global, ('xt', 'yt')))
 
     @staticmethod
     @veros_method(dist_safe=False, local_variables=[])
@@ -87,10 +88,7 @@ class SciPySolver(LinearSolver):
         eps = 1e-20
         Z = allocate(vs, ('xu', 'yu'), fill=1, local=False)
         Y = np.reshape(matrix.diagonal().copy(), (vs.nx + 4, vs.ny + 4))[2:-2, 2:-2]
-        Z[2:-2, 2:-2] = utilities.where(vs, np.abs(Y) > eps, 1. / (Y + eps), 1.)
-
-        if rs.backend == 'bohrium':
-            Z = Z.copy2numpy()
+        Z = jax.ops.index_update(Z, jax.ops.index[2:-2, 2:-2], utilities.where(vs, np.abs(Y) > eps, 1. / (Y + eps), 1.))
 
         return scipy.sparse.dia_matrix((Z.flatten(), 0), shape=(Z.size, Z.size)).tocsr()
 
@@ -100,31 +98,41 @@ class SciPySolver(LinearSolver):
         """
         Construct a sparse matrix based on the stencil for the 2D Poisson equation.
         """
-        boundary_mask = np.logical_and.reduce(~vs.boundary_mask, axis=2)
+        boundary_mask = np.all(~vs.boundary_mask, axis=2)
 
         # assemble diagonals
         main_diag = allocate(vs, ('xu', 'yu'), fill=1, local=False)
         east_diag, west_diag, north_diag, south_diag = (allocate(vs, ('xu', 'yu'), local=False) for _ in range(4))
-        main_diag[2:-2, 2:-2] = -vs.hvr[3:-1, 2:-2] / vs.dxu[2:-2, np.newaxis] / vs.dxt[3:-1, np.newaxis] / vs.cosu[np.newaxis, 2:-2]**2 \
+        main_diag = jax.ops.index_update(main_diag, jax.ops.index[2:-2, 2:-2],
+            -vs.hvr[3:-1, 2:-2] / vs.dxu[2:-2, np.newaxis] / vs.dxt[3:-1, np.newaxis] / vs.cosu[np.newaxis, 2:-2]**2 \
             - vs.hvr[2:-2, 2:-2] / vs.dxu[2:-2, np.newaxis] / vs.dxt[2:-2, np.newaxis] / vs.cosu[np.newaxis, 2:-2]**2 \
             - vs.hur[2:-2, 2:-2] / vs.dyu[np.newaxis, 2:-2] / vs.dyt[np.newaxis, 2:-2] * vs.cost[np.newaxis, 2:-2] / vs.cosu[np.newaxis, 2:-2] \
             - vs.hur[2:-2, 3:-1] / vs.dyu[np.newaxis, 2:-2] / vs.dyt[np.newaxis, 3:-1] * vs.cost[np.newaxis, 3:-1] / vs.cosu[np.newaxis, 2:-2]
-        east_diag[2:-2, 2:-2] = vs.hvr[3:-1, 2:-2] / vs.dxu[2:-2, np.newaxis] / \
+        )
+        east_diag = jax.ops.index_update(east_diag, jax.ops.index[2:-2, 2:-2],
+            vs.hvr[3:-1, 2:-2] / vs.dxu[2:-2, np.newaxis] / \
             vs.dxt[3:-1, np.newaxis] / vs.cosu[np.newaxis, 2:-2]**2
-        west_diag[2:-2, 2:-2] = vs.hvr[2:-2, 2:-2] / vs.dxu[2:-2, np.newaxis] / \
+        )
+        west_diag = jax.ops.index_update(west_diag, jax.ops.index[2:-2, 2:-2],
+            vs.hvr[2:-2, 2:-2] / vs.dxu[2:-2, np.newaxis] / \
             vs.dxt[2:-2, np.newaxis] / vs.cosu[np.newaxis, 2:-2]**2
-        north_diag[2:-2, 2:-2] = vs.hur[2:-2, 3:-1] / vs.dyu[np.newaxis, 2:-2] / \
+        )
+        north_diag = jax.ops.index_update(north_diag, jax.ops.index[2:-2, 2:-2],
+            vs.hur[2:-2, 3:-1] / vs.dyu[np.newaxis, 2:-2] / \
             vs.dyt[np.newaxis, 3:-1] * vs.cost[np.newaxis, 3:-1] / vs.cosu[np.newaxis, 2:-2]
-        south_diag[2:-2, 2:-2] = vs.hur[2:-2, 2:-2] / vs.dyu[np.newaxis, 2:-2] / \
+        )
+        south_diag = jax.ops.index_update(south_diag, jax.ops.index[2:-2, 2:-2],
+            vs.hur[2:-2, 2:-2] / vs.dyu[np.newaxis, 2:-2] / \
             vs.dyt[np.newaxis, 2:-2] * vs.cost[np.newaxis, 2:-2] / vs.cosu[np.newaxis, 2:-2]
+        )
 
         if vs.enable_cyclic_x:
             # couple edges of the domain
             wrap_diag_east, wrap_diag_west = (allocate(vs, ('xu', 'yu'), local=False) for _ in range(2))
-            wrap_diag_east[2, 2:-2] = west_diag[2, 2:-2] * boundary_mask[2, 2:-2]
-            wrap_diag_west[-3, 2:-2] = east_diag[-3, 2:-2] * boundary_mask[-3, 2:-2]
-            west_diag[2, 2:-2] = 0.
-            east_diag[-3, 2:-2] = 0.
+            wrap_diag_east = jax.ops.index_update(wrap_diag_east, jax.ops.index[2, 2:-2], west_diag[2, 2:-2] * boundary_mask[2, 2:-2])
+            wrap_diag_west = jax.ops.index_update(wrap_diag_west, jax.ops.index[-3, 2:-2], east_diag[-3, 2:-2] * boundary_mask[-3, 2:-2])
+            west_diag = jax.ops.index_update(west_diag, jax.ops.index[2, 2:-2], 0.)
+            east_diag = jax.ops.index_update(east_diag, jax.ops.index[-3, 2:-2], 0.)
 
         # construct sparse matrix
         cf = tuple(diag.flatten() for diag in (

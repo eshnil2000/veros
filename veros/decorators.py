@@ -113,10 +113,15 @@ def _veros_method(function, inline=False, dist_safe=True, local_vars=None,
         newargs = list(args)
         newargs[narg] = func_state
 
+        fun = function
+        if rs.backend == 'jax':
+            import jax
+            # fun = jax.jit(fun)
+
         res = None
         try:
             if execute:
-                res = function(*newargs, **kwargs)
+                res = fun(*newargs, **kwargs)
         except:
             if reset_dist_safe:
                 CONTEXT.is_dist_safe = True

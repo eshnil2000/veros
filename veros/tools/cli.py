@@ -4,7 +4,7 @@ import click
 
 from veros.settings import SETTINGS
 
-BACKENDS = ['numpy', 'bohrium']
+BACKENDS = ['numpy', 'bohrium', 'jax']
 LOGLEVELS = ['trace', 'debug', 'info', 'warning', 'error', 'critical']
 
 

@@ -1,6 +1,7 @@
 import os
 
 from loguru import logger
+import jax.ops
 
 from .. import veros_method, time
 from .diagnostic import VerosDiagnostic
@@ -64,7 +65,7 @@ class Snapshot(VerosDiagnostic):
                                'restart data dimensions do not match model '
                                'grid'.format(key))
                 continue
-            arr[...] = restart_var
+            arr = jax.ops.index_update(arr, jax.ops.index[...], restart_var)
         for attr in self.restart_attributes:
             try:
                 setattr(vs, attr, attributes[attr])

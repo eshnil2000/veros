@@ -1,4 +1,5 @@
 from loguru import logger
+import jax.ops
 
 from ... import veros_method, runtime_settings as rs, runtime_state as rst
 from ...variables import allocate
@@ -9,7 +10,8 @@ from . import island, utilities
 @veros_method(inline=True, dist_safe=False, local_variables=['kbot', 'land_map'])
 def get_isleperim(vs):
     logger.debug(' Determining number of land masses')
-    vs.land_map[...] = island.isleperim(vs, vs.kbot)
+    vs.land_map = jax.ops.index_update(vs.land_map, jax.ops.index[...],
+        island.isleperim(vs, vs.kbot))
     logger.info(_ascii_map(vs, vs.land_map))
     return int(vs.land_map.max())
 
@@ -82,21 +84,31 @@ def streamfunction_init(vs):
         boundary_map = vs.land_map == (isle + 1)
 
         if vs.enable_cyclic_x:
-            vs.line_dir_east_mask[2:-2, 1:-1, isle] = boundary_map[3:-1, 1:-1] & ~boundary_map[3:-1, 2:]
-            vs.line_dir_west_mask[2:-2, 1:-1, isle] = boundary_map[2:-2, 2:] & ~boundary_map[2:-2, 1:-1]
-            vs.line_dir_south_mask[2:-2, 1:-1, isle] = boundary_map[2:-2, 1:-1] & ~boundary_map[3:-1, 1:-1]
-            vs.line_dir_north_mask[2:-2, 1:-1, isle] = boundary_map[3:-1, 2:] & ~boundary_map[2:-2, 2:]
+            vs.line_dir_east_mask = jax.ops.index_update(vs.line_dir_east_mask, jax.ops.index[2:-2, 1:-1, isle],
+                boundary_map[3:-1, 1:-1] & ~boundary_map[3:-1, 2:])
+            vs.line_dir_west_mask = jax.ops.index_update(vs.line_dir_west_mask, jax.ops.index[2:-2, 1:-1, isle],
+                boundary_map[2:-2, 2:] & ~boundary_map[2:-2, 1:-1])
+            vs.line_dir_south_mask = jax.ops.index_update(vs.line_dir_south_mask, jax.ops.index[2:-2, 1:-1, isle],
+                boundary_map[2:-2, 1:-1] & ~boundary_map[3:-1, 1:-1])
+            vs.line_dir_north_mask = jax.ops.index_update(vs.line_dir_north_mask, jax.ops.index[2:-2, 1:-1, isle],
+                boundary_map[3:-1, 2:] & ~boundary_map[2:-2, 2:])
         else:
-            vs.line_dir_east_mask[1:-1, 1:-1, isle] = boundary_map[2:, 1:-1] & ~boundary_map[2:, 2:]
-            vs.line_dir_west_mask[1:-1, 1:-1, isle] = boundary_map[1:-1, 2:] & ~boundary_map[1:-1, 1:-1]
-            vs.line_dir_south_mask[1:-1, 1:-1, isle] = boundary_map[1:-1, 1:-1] & ~boundary_map[2:, 1:-1]
-            vs.line_dir_north_mask[1:-1, 1:-1, isle] = boundary_map[2:, 2:] & ~boundary_map[1:-1, 2:]
+            vs.line_dir_east_mask = jax.ops.index_update(vs.line_dir_east_mask, jax.ops.index[1:-1, 1:-1, isle],
+                boundary_map[2:, 1:-1] & ~boundary_map[2:, 2:])
+            vs.line_dir_west_mask = jax.ops.index_update(vs.line_dir_west_mask, jax.ops.index[1:-1, 1:-1, isle],
+                boundary_map[1:-1, 2:] & ~boundary_map[1:-1, 1:-1])
+            vs.line_dir_south_mask = jax.ops.index_update(vs.line_dir_south_mask, jax.ops.index[1:-1, 1:-1, isle],
+                boundary_map[1:-1, 1:-1] & ~boundary_map[2:, 1:-1])
+            vs.line_dir_north_mask = jax.ops.index_update(vs.line_dir_north_mask, jax.ops.index[1:-1, 1:-1, isle],
+                boundary_map[2:, 2:] & ~boundary_map[1:-1, 2:])
 
-        vs.boundary_mask[..., isle] = (
-            vs.line_dir_east_mask[..., isle]
-            | vs.line_dir_west_mask[..., isle]
-            | vs.line_dir_north_mask[..., isle]
-            | vs.line_dir_south_mask[..., isle]
+        vs.boundary_mask = jax.ops.index_update(vs.boundary_mask, jax.ops.index[..., isle],
+            (
+                vs.line_dir_east_mask[..., isle]
+                | vs.line_dir_west_mask[..., isle]
+                | vs.line_dir_north_mask[..., isle]
+                | vs.line_dir_south_mask[..., isle]
+            )
         )
 
     vs.linear_solver = _get_solver_class()(vs)
@@ -106,8 +118,9 @@ def streamfunction_init(vs):
     """
     forc = allocate(vs, ('xu', 'yu'))
 
-    # initialize with random noise to achieve uniform convergence
-    vs.psin[...] = vs.maskZ[..., -1, np.newaxis]# np.random.rand(*vs.psin.shape) * vs.maskZ[..., -1, np.newaxis]
+    vs.psin = jax.ops.index_update(vs.psin, jax.ops.index[...],
+        vs.maskZ[..., -1, np.newaxis]
+    )
 
     for isle in range(vs.nisle):
         logger.info(' Solving for boundary contribution by island {:d}'.format(isle))
@@ -129,7 +142,8 @@ def streamfunction_init(vs):
         * (vs.psin[1:, 1:, :] - vs.psin[:-1, 1:, :]) \
         / (vs.cosu[np.newaxis, 1:, np.newaxis] * vs.dxt[1:, np.newaxis, np.newaxis]) \
         * vs.hvr[1:, 1:, np.newaxis]
-    vs.line_psin[...] = utilities.line_integrals(vs, fpx, fpy, kind='full')
+    vs.line_psin = jax.ops.index_update(vs.line_psin, jax.ops.index[...],
+        utilities.line_integrals(vs, fpx, fpy, kind='full'))
 
 
 @veros_method

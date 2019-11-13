@@ -1,3 +1,5 @@
+import jax.ops
+
 from ... import veros_method
 from veros.distributed import global_sum
 
@@ -64,6 +66,7 @@ def line_integrals(vs, uloc, vloc, kind='same'):
                 * (vs.line_dir_south_mask[1:-2, 1:-2] & vs.boundary_mask[1:-2, 1:-2]),
                 axis=(0, 1)
             )
-            out[:, isle] = east_isle + west_isle + north_isle + south_isle
+            out = jax.ops.index_update(out, jax.ops.index[:, isle],
+                east_isle + west_isle + north_isle + south_isle)
 
     return global_sum(vs, out)

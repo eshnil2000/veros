@@ -1,3 +1,5 @@
+import jax.ops
+
 from .. import veros_method, runtime_settings as rs, runtime_state as rst
 
 
@@ -8,8 +10,8 @@ def enforce_boundaries(vs, arr, local=False):
 
     if vs.enable_cyclic_x:
         if rs.num_proc[0] == 1 or not CONTEXT.is_dist_safe or local:
-            arr[-2:, ...] = arr[2:4, ...]
-            arr[:2, ...] = arr[-4:-2, ...]
+            arr = jax.ops.index_update(arr, jax.ops.index[-2:, ...], arr[2:4, ...])
+            arr = jax.ops.index_update(arr, jax.ops.index[:2, ...], arr[-4:-2, ...])
         else:
             exchange_cyclic_boundaries(vs, arr)
 
@@ -21,7 +23,6 @@ def enforce_boundaries(vs, arr, local=False):
 
 @veros_method(inline=True)
 def where(vs, cond, arr1, arr2):
-    assert cond.dtype == np.bool
     return cond * arr1 + np.logical_not(cond) * arr2
 
 
@@ -32,16 +33,16 @@ def pad_z_edges(vs, array):
     """
     if array.ndim == 1:
         newarray = np.zeros(array.shape[0] + 2, dtype=array.dtype)
-        newarray[1:-1] = array
-        newarray[0] = array[0]
-        newarray[-1] = array[-1]
+        newarray = jax.ops.index_update(newarray, jax.ops.index[1:-1], array)
+        newarray = jax.ops.index_update(newarray, jax.ops.index[0], array[0])
+        newarray = jax.ops.index_update(newarray, jax.ops.index[-1], array[-1])
     elif array.ndim >= 3:
         a = list(array.shape)
         a[2] += 2
         newarray = np.zeros(a, dtype=array.dtype)
-        newarray[:, :, 1:-1, ...] = array
-        newarray[:, :, 0, ...] = array[:, :, 0, ...]
-        newarray[:, :, -1, ...] = array[:, :, -1, ...]
+        newarray = jax.ops.index_update(newarray, jax.ops.index[:, :, 1:-1, ...], array)
+        newarray = jax.ops.index_update(newarray, jax.ops.index[:, :, 0, ...], array[:, :, 0, ...])
+        newarray = jax.ops.index_update(newarray, jax.ops.index[:, :, -1, ...], array[:, :, -1, ...])
     else:
         raise ValueError('Array to pad needs to have 1 or at least 3 dimensions')
     return newarray

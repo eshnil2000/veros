@@ -1,3 +1,5 @@
+import jax.ops
+
 from collections import OrderedDict
 
 from . import veros_method, runtime_settings
@@ -101,7 +103,7 @@ def add_ghosts(vs, array, dims):
                         dim in zip(array.shape, dims)])
     newarr = np.zeros(full_shape, dtype=array.dtype)
     ghost_mask = tuple(slice(2, -2) if dim in GHOST_DIMENSIONS else slice(None) for dim in dims)
-    newarr[ghost_mask] = array
+    newarr = jax.ops.index_update(newarr, jax.ops.index[ghost_mask], array)
     return newarr
 
 
@@ -753,5 +755,5 @@ def allocate(vs, dimensions, dtype=None, include_ghosts=True, local=True, fill=0
 
     shape = get_dimensions(vs, dimensions, include_ghosts=include_ghosts, local=local)
     out = np.empty(shape, dtype=dtype)
-    out[...] = fill
+    out = jax.ops.index_update(out, jax.ops.index[...], fill)
     return out

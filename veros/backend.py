@@ -38,6 +38,9 @@ def init_backends():
     else:
         BACKENDS['bohrium'] = bohrium
 
+    import jax
+    BACKENDS['jax'] = jax.numpy
+
 
 def get_backend(backend_name):
     if BACKENDS is None:
@@ -76,7 +79,7 @@ def get_vector_engine(np):
 def flush():
     from . import runtime_settings as rs
 
-    if rs.backend == 'numpy':
+    if rs.backend == 'numpy' or rs.backend == 'jax':
         pass
 
     elif rs.backend == 'bohrium':

@@ -117,7 +117,7 @@ def write_variable(vs, key, var, var_data, ncfile, time_step=None):
 
         chunk = (time_step,) + chunk[1:]
 
-    var_obj[chunk] = var_data
+    var_obj = jax.ops.index_update(var_obj, jax.ops.index[chunk], var_data)
 
 
 @contextlib.contextmanager

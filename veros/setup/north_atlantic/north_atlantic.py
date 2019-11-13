@@ -97,13 +97,17 @@ class NorthAtlanticSetup(VerosSetup):
 
     @veros_method
     def set_grid(self, vs):
-        vs.dxt[2:-2] = (vs._x_boundary - vs.x_origin) / vs.nx
-        vs.dyt[2:-2] = (vs._y_boundary - vs.y_origin) / vs.ny
-        vs.dzt[...] = veros.tools.get_vinokur_grid_steps(vs.nz, vs._max_depth, 10., refine_towards='lower')
+        vs.dxt = jax.ops.index_update(vs.dxt, jax.ops.index[2:-2],
+        (vs._x_boundary - vs.x_origin) / vs.nx
+        vs.dyt = jax.ops.index_update(vs.dyt, jax.ops.index[2:-2],
+        (vs._y_boundary - vs.y_origin) / vs.ny
+        vs.dzt = jax.ops.index_update(vs.dzt, jax.ops.index[...],
+        veros.tools.get_vinokur_grid_steps(vs.nz, vs._max_depth, 10., refine_towards='lower')
 
     @veros_method
     def set_coriolis(self, vs):
-        vs.coriolis_t[:, :] = 2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi)
+        vs.coriolis_t = jax.ops.index_update(vs.coriolis_t, jax.ops.index[:, :],
+        2 * vs.omega * np.sin(vs.yt[np.newaxis, :] / 180. * vs.pi)
 
     @veros_method(dist_safe=False, local_variables=[
         'kbot', 'xt', 'yt', 'zt'
@@ -122,7 +126,8 @@ class NorthAtlanticSetup(VerosSetup):
         interp_coords = np.rollaxis(np.asarray(interp_coords), 0, 3)
         z_interp = scipy.interpolate.interpn((topo_x, topo_y), topo_bottom_depth, interp_coords,
                                              method='nearest', bounds_error=False, fill_value=0)
-        vs.kbot[2:-2, 2:-2] = np.where(z_interp < 0., 1 + np.argmin(np.abs(z_interp[:, :, np.newaxis]
+        vs.kbot = jax.ops.index_update(vs.kbot, jax.ops.index[2:-2, 2:-2],
+        np.where(z_interp < 0., 1 + np.argmin(np.abs(z_interp[:, :, np.newaxis]
                                        - vs.zt[np.newaxis, np.newaxis, :]), axis=2), 0)
         vs.kbot *= vs.kbot < vs.nz
 
@@ -149,13 +154,15 @@ class NorthAtlanticSetup(VerosSetup):
             temp = veros.tools.interpolate(
                 forc_coords, temp_raw, t_grid, missing_value=-1e20
             )
-            vs.temp[2:-2, 2:-2, :, vs.tau] = vs.maskT[2:-2, 2:-2, :] * temp
+            vs.temp = jax.ops.index_update(vs.temp, jax.ops.index[2:-2, 2:-2, :, vs.tau],
+        vs.maskT[2:-2, 2:-2, :] * temp
 
             salt_raw = self._get_data(vs, forcing_file, 'salt_ic')[..., ::-1]
             salt = 35. + 1000 * veros.tools.interpolate(
                 forc_coords, salt_raw, t_grid, missing_value=-1e20
             )
-            vs.salt[2:-2, 2:-2, :, vs.tau] = vs.maskT[2:-2, 2:-2, :] * salt
+            vs.salt = jax.ops.index_update(vs.salt, jax.ops.index[2:-2, 2:-2, :, vs.tau],
+        vs.maskT[2:-2, 2:-2, :] * salt
 
             forc_u_coords_hor = [self._get_data(vs, forcing_file, k) for k in ('xu', 'yu')]
             forc_u_coords_hor[0][...] += -360
@@ -163,10 +170,12 @@ class NorthAtlanticSetup(VerosSetup):
             taux = self._get_data(vs, forcing_file, 'taux')
             tauy = self._get_data(vs, forcing_file, 'tauy')
             for k in range(12):
-                vs.taux[2:-2, 2:-2, k] = veros.tools.interpolate(
+                vs.taux = jax.ops.index_update(vs.taux, jax.ops.index[2:-2, 2:-2, k],
+        veros.tools.interpolate(
                     forc_u_coords_hor, taux[..., k], t_hor, missing_value=-1e20
                 ) / 10.
-                vs.tauy[2:-2, 2:-2, k] = veros.tools.interpolate(
+                vs.tauy = jax.ops.index_update(vs.tauy, jax.ops.index[2:-2, 2:-2, k],
+        veros.tools.interpolate(
                     forc_u_coords_hor, tauy[..., k], t_hor, missing_value=-1e20
                 ) / 10.
 
@@ -177,13 +186,17 @@ class NorthAtlanticSetup(VerosSetup):
             ]
 
         for k in range(12):
-            vs.sst_clim[2:-2, 2:-2, k] = veros.tools.interpolate(
+            vs.sst_clim = jax.ops.index_update(vs.sst_clim, jax.ops.index[2:-2, 2:-2, k],
+        veros.tools.interpolate(
                 forc_coords[:-1], sst_clim[..., k], t_hor, missing_value=-1e20)
-            vs.sss_clim[2:-2, 2:-2, k] = veros.tools.interpolate(
+            vs.sss_clim = jax.ops.index_update(vs.sss_clim, jax.ops.index[2:-2, 2:-2, k],
+        veros.tools.interpolate(
                 forc_coords[:-1], sss_clim[..., k], t_hor, missing_value=-1e20) * 1000 + 35
-            vs.sst_rest[2:-2, 2:-2, k] = veros.tools.interpolate(
+            vs.sst_rest = jax.ops.index_update(vs.sst_rest, jax.ops.index[2:-2, 2:-2, k],
+        veros.tools.interpolate(
                 forc_coords[:-1], sst_rest[..., k], t_hor, missing_value=-1e20) * 41868.
-            vs.sss_rest[2:-2, 2:-2, k] = veros.tools.interpolate(
+            vs.sss_rest = jax.ops.index_update(vs.sss_rest, jax.ops.index[2:-2, 2:-2, k],
+        veros.tools.interpolate(
                 forc_coords[:-1], sss_rest[..., k], t_hor, missing_value=-1e20) / 100.
 
         with h5netcdf.File(DATA_FILES['restoring'], 'r') as restoring_file:
@@ -192,16 +205,19 @@ class NorthAtlanticSetup(VerosSetup):
 
             # sponge layers
 
-            vs.rest_tscl[2:-2, 2:-2, :] = veros.tools.interpolate(
+            vs.rest_tscl = jax.ops.index_update(vs.rest_tscl, jax.ops.index[2:-2, 2:-2, :],
+        veros.tools.interpolate(
                 rest_coords, self._get_data(vs, restoring_file, 'tscl')[..., 0], t_grid)
 
             t_star = self._get_data(vs, restoring_file, 't_star')
             s_star = self._get_data(vs, restoring_file, 's_star')
             for k in range(12):
-                vs.t_star[2:-2, 2:-2, :, k] = veros.tools.interpolate(
+                vs.t_star = jax.ops.index_update(vs.t_star, jax.ops.index[2:-2, 2:-2, :, k],
+        veros.tools.interpolate(
                     rest_coords, t_star[..., k], t_grid, missing_value=0.
                 )
-                vs.s_star[2:-2, 2:-2, :, k] = veros.tools.interpolate(
+                vs.s_star = jax.ops.index_update(vs.s_star, jax.ops.index[2:-2, 2:-2, :, k],
+        veros.tools.interpolate(
                     rest_coords, s_star[..., k], t_grid, missing_value=0.
                 )
 
@@ -211,18 +227,23 @@ class NorthAtlanticSetup(VerosSetup):
         (n1, f1), (n2, f2) = veros.tools.get_periodic_interval(vs.time, year_in_seconds,
                                                                year_in_seconds / 12., 12)
 
-        vs.surface_taux[...] = (f1 * vs.taux[:, :, n1] + f2 * vs.taux[:, :, n2])
-        vs.surface_tauy[...] = (f1 * vs.tauy[:, :, n1] + f2 * vs.tauy[:, :, n2])
+        vs.surface_taux = jax.ops.index_update(vs.surface_taux, jax.ops.index[...],
+        (f1 * vs.taux[:, :, n1] + f2 * vs.taux[:, :, n2])
+        vs.surface_tauy = jax.ops.index_update(vs.surface_tauy, jax.ops.index[...],
+        (f1 * vs.tauy[:, :, n1] + f2 * vs.tauy[:, :, n2])
 
         if vs.enable_tke:
-            vs.forc_tke_surface[1:-1, 1:-1] = np.sqrt((0.5 * (vs.surface_taux[1:-1, 1:-1] + vs.surface_taux[:-2, 1:-1]) / vs.rho_0)**2
+            vs.forc_tke_surface = jax.ops.index_update(vs.forc_tke_surface, jax.ops.index[1:-1, 1:-1],
+        np.sqrt((0.5 * (vs.surface_taux[1:-1, 1:-1] + vs.surface_taux[:-2, 1:-1]) / vs.rho_0)**2
                                                       + (0.5 * (vs.surface_tauy[1:-1, 1:-1] + vs.surface_tauy[1:-1, :-2]) / vs.rho_0)**2
                                                       ) ** (3. / 2.)
         cp_0 = 3991.86795711963
-        vs.forc_temp_surface[...] = (f1 * vs.sst_rest[:, :, n1] + f2 * vs.sst_rest[:, :, n2]) * \
+        vs.forc_temp_surface = jax.ops.index_update(vs.forc_temp_surface, jax.ops.index[...],
+        (f1 * vs.sst_rest[:, :, n1] + f2 * vs.sst_rest[:, :, n2]) * \
                                     (f1 * vs.sst_clim[:, :, n1] + f2 * vs.sst_clim[:, :, n2]
                                      - vs.temp[:, :, -1, vs.tau]) * vs.maskT[:, :, -1] / cp_0 / vs.rho_0
-        vs.forc_salt_surface[...] = (f1 * vs.sss_rest[:, :, n1] + f2 * vs.sss_rest[:, :, n2]) * \
+        vs.forc_salt_surface = jax.ops.index_update(vs.forc_salt_surface, jax.ops.index[...],
+        (f1 * vs.sss_rest[:, :, n1] + f2 * vs.sss_rest[:, :, n2]) * \
                                     (f1 * vs.sss_clim[:, :, n1] + f2 * vs.sss_clim[:, :, n2]
                                      - vs.salt[:, :, -1, vs.tau]) * vs.maskT[:, :, -1]
 
@@ -231,9 +252,11 @@ class NorthAtlanticSetup(VerosSetup):
         vs.forc_salt_surface[...] *= ~ice_mask
 
         if vs.enable_tempsalt_sources:
-            vs.temp_source[...] = vs.maskT * vs.rest_tscl \
+            vs.temp_source = jax.ops.index_update(vs.temp_source, jax.ops.index[...],
+        vs.maskT * vs.rest_tscl \
                 * (f1 * vs.t_star[:, :, :, n1] + f2 * vs.t_star[:, :, :, n2] - vs.temp[:, :, :, vs.tau])
-            vs.salt_source[...] = vs.maskT * vs.rest_tscl \
+            vs.salt_source = jax.ops.index_update(vs.salt_source, jax.ops.index[...],
+        vs.maskT * vs.rest_tscl \
                 * (f1 * vs.s_star[:, :, :, n1] + f2 * vs.s_star[:, :, :, n2] - vs.salt[:, :, :, vs.tau])
 
     @veros_method
